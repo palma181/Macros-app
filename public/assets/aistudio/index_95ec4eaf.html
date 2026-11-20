@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d5b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Mis macros</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--tx:#1f2421;--mut:#6b726d;--ln:#e4e2da;--ac:#2f7d5b;--p:#d9534f;--c:#e0a030;--f:#4a7fc1;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#171a18;--card:#222623;--tx:#eceee9;--mut:#9aa39c;--ln:#343a36;--ac:#58b88f;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+main{max-width:640px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:4px 0 12px}h2{font-size:15px;margin:0 0 10px}
+nav{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}
+nav button{flex:1;white-space:nowrap;padding:8px 10px;border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:10px;font:inherit;cursor:pointer}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:70px}
+input,select,textarea{width:100%;padding:9px;border:1px solid var(--ln);border-radius:9px;background:var(--bg);color:var(--tx);font:inherit}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:3px}
+button.pri{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 14px;font:inherit;cursor:pointer;width:100%;margin-top:10px}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--ac);border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer}
+.bar{height:9px;background:var(--ln);border-radius:6px;overflow:hidden;margin:4px 0 10px}.bar i{display:block;height:100%}
+.lbl{display:flex;justify-content:space-between;font-size:13px}.mut{color:var(--mut);font-size:13px}
+.meal{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--ln)}
+.meal:first-of-type{border-top:0}.x{background:none;border:0;color:var(--mut);cursor:pointer;font-size:18px}
+.days{display:flex;gap:4px;align-items:flex-end;height:90px}.days div{flex:1;text-align:center;font-size:11px;color:var(--mut)}
+.days i{display:block;background:var(--ac);border-radius:4px 4px 0 0;margin-bottom:3px}
+.ai{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+<h1>Mis macros</h1>
+<nav id="nav"></nav>
+<div id="v"></div>
+</main>
+<script>
+const KEY='macros-v1';
+const PRE={openai:['https://api.openai.com/v1','gpt-4o-mini'],gemini:['https://generativelanguage.googleapis.com/v1beta/openai','gemini-2.0-flash'],openrouter:['https://openrouter.ai/api/v1','openai/gpt-4o-mini'],groq:['https://api.groq.com/openai/v1','llama-3.3-70b-versatile'],local:['http://localhost:11434/v1','llava'],otro:['','']};
+let S={goals:{kcal:2000,p:150,c:200,f:60},meals:[],weights:[],ai:{preset:'openai',url:PRE.openai[0],key:'',model:PRE.openai[1]}};
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const M=[['kcal','Calorías','var(--ac)','kcal'],['p','Proteína','var(--p)','g'],['c','Carbohidratos','var(--c)','g'],['f','Grasa','var(--f)','g']];
+const iso=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)};
+const today=()=>iso(new Date());
+const addD=(s,n)=>{const d=new Date(s+'T12:00');d.setDate(d.getDate()+n);return iso(d)};
+const monday=s=>{const d=new Date(s+'T12:00');return addD(s,-((d.getDay()+6)%7))};
+const dim=s=>{const d=new Date(s+'T12:00');return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()};
+const sum=l=>l.reduce((a,m)=>({kcal:a.kcal+m.kcal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{kcal:0,p:0,c:0,f:0});
+const inR=(a,b)=>S.meals.filter(m=>m.date>=a&&m.date<=b);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tab='hoy',aiOut='';
+const tabs=[['hoy','Hoy'],['sem','Semana'],['mes','Mes'],['peso','Peso'],['metas','Metas'],['ia','IA']];
+async function callAI(content,json){const c=S.ai;
+if(!c.url)throw new Error('Configura tu IA en la pestaña IA');
+if(!c.key&&!/localhost|127\.0\.0\.1|192\.168\./.test(c.url))throw new Error('Falta la clave de API (pestaña IA)');
+const r=await fetch(c.url.replace(/\/$/,'')+'/chat/completions',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},c.key?{Authorization:'Bearer '+c.key}:{}),body:JSON.stringify({model:c.model,messages:[{role:'user',content}]})});
+if(!r.ok)throw new Error('Error '+r.status+': '+(await r.text()).slice(0,150));
+const t=(await r.json()).choices[0].message.content;
+if(!json)return t;const m=t.match(/\{[\s\S]*\}/);return JSON.parse(m[0])}
+function bars(t,days){return M.map(([k,n,col,u])=>{const g=S.goals[k]*days,pc=g?Math.min(100,t[k]/g*100):0;
+return `<div class="lbl"><span>${n}</span><span>${Math.round(t[k])} / ${Math.round(g)} ${u}</span></div><div class="bar"><i style="width:${pc}%;background:${col}"></i></div>`}).join('')}
+function mealList(l){return l.length?l.map(m=>`<div class="meal"><div><b>${esc(m.name)}</b><div class="mut">${esc(m.type)} · ${m.kcal} kcal · P${m.p} C${m.c} G${m.f}</div></div><button class="x" data-del="${m.id}" aria-label="Borrar">×</button></div>`).join(''):'<div class="mut">Aún no hay comidas.</div>'}
+function render(){
+document.getElementById('nav').innerHTML=tabs.map(([k,n])=>`<button class="${tab===k?'on':''}" data-t="${k}">${n}</button>`).join('');
+const v=document.getElementById('v'),t0=today();let h='';
+if(tab==='hoy'){const l=inR(t0,t0);
+h=`<div class="card"><h2>Hoy</h2>${bars(sum(l),1)}</div>
+<div class="card"><h2>Agregar comida</h2>
+<label>Descripción</label><input id="n" placeholder="Ej. 2 huevos con tortilla y frijoles">
+<div class="row" style="margin-top:8px"><div><label>Momento</label><select id="ty"><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Snack</option></select></div><div><label>Fecha</label><input id="d" type="date" value="${t0}"></div></div>
+<div class="row" style="margin-top:8px"><div><label>kcal</label><input id="k" type="number" min="0"></div><div><label>Prot (g)</label><input id="p" type="number" min="0"></div><div><label>Carb (g)</label><input id="c" type="number" min="0"></div><div><label>Grasa (g)</label><input id="f" type="number" min="0"></div></div>
+<div class="row" style="margin-top:10px"><button class="sec" id="ph">📷 Foto de la comida</button><button class="sec" id="est">✨ Estimar por texto</button></div><input type="file" id="pf" accept="image/*" hidden><div id="st" class="mut" style="margin-top:6px"></div>
+<button class="pri" id="add">Guardar comida</button></div>
+<div class="card"><h2>Comidas de hoy</h2>${mealList(l)}</div>`}
+if(tab==='sem'){const a=monday(t0),b=addD(a,6),l=inR(a,b),mx=Math.max(S.goals.kcal,...Array.from({length:7},(_,i)=>sum(inR(addD(a,i),addD(a,i))).kcal));
+h=`<div class="card"><h2>Semana (${a} a ${b})</h2>${bars(sum(l),7)}</div><div class="card"><h2>Calorías por día</h2><div class="days">${Array.from({length:7},(_,i)=>{const d=addD(a,i),k=sum(inR(d,d)).kcal;return `<div><i style="height:${k/mx*70}px"></i>${'LMMJVSD'[i]}</div>`}).join('')}</div></div>`}
+if(tab==='mes'){const a=t0.slice(0,8)+'01',n=dim(t0),b=t0.slice(0,8)+String(n).padStart(2,'0'),l=inR(a,b),dl=new Set(l.map(m=>m.date)).size,s=sum(l);
+h=`<div class="card"><h2>Mes (${t0.slice(0,7)})</h2>${bars(s,n)}</div><div class="card"><h2>Promedio</h2><div class="mut">${dl} días con registro · ${dl?Math.round(s.kcal/dl):0} kcal/día · P${dl?Math.round(s.p/dl):0} C${dl?Math.round(s.c/dl):0} G${dl?Math.round(s.f/dl):0}</div></div>`}
+if(tab==='peso'){const w=S.weights,last=w[w.length-1];let sv='';if(w.length>1){const ks=w.map(x=>x.kg),mn=Math.min(...ks),mx=Math.max(...ks),r=(mx-mn)||1;sv=`<svg viewBox="0 0 300 80" style="width:100%;height:80px"><polyline fill="none" stroke="var(--ac)" stroke-width="2" points="${w.map((x,i)=>`${i/(w.length-1)*290+5},${70-(x.kg-mn)/r*60}`).join(' ')}"/></svg>`}
+h=`<div class="card"><h2>Peso corporal</h2><div class="row"><div><label>Peso (kg)</label><input id="kg" type="number" step="0.1" min="0"></div><div><label>Fecha</label><input id="wd" type="date" value="${t0}"></div></div><button class="pri" id="aw">Guardar peso</button></div>
+<div class="card"><h2>Evolución${last?` · último: ${last.kg} kg`:''}</h2>${sv}${w.slice().reverse().map(x=>`<div class="meal"><div>${x.date} · <b>${x.kg} kg</b></div><button class="x" data-dw="${x.date}" aria-label="Borrar">×</button></div>`).join('')||'<div class="mut">Aún no hay registros.</div>'}</div>`}
+if(tab==='metas'){h=`<div class="card"><h2>Meta diaria</h2><div class="row">${M.map(([k,n,,u])=>`<div><label>${n} (${u})</label><input type="number" min="0" id="g${k}" value="${S.goals[k]}"></div>`).join('')}</div><button class="pri" id="sg">Guardar metas</button><p class="mut">La meta semanal es la diaria × 7 y la mensual es la diaria × los días del mes.</p></div>
+<div class="card"><h2>Respaldo de datos</h2><div class="row"><button class="sec" id="ex">Exportar (JSON)</button><button class="sec" id="im">Importar</button></div><input type="file" id="imf" accept=".json,application/json" hidden></div>`}
+if(tab==='ia'){const a=S.ai;h=`<div class="card"><h2>Conexión con tu IA</h2>
+<label>Proveedor</label><select id="pr">${Object.keys(PRE).map(k=>`<option ${a.preset===k?'selected':''}>${k}</option>`).join('')}</select>
+<label style="margin-top:8px">URL base (compatible con OpenAI)</label><input id="au" value="${esc(a.url)}">
+<label style="margin-top:8px">Clave de API</label><input id="ak" type="password" value="${esc(a.key)}" placeholder="sk-...">
+<label style="margin-top:8px">Modelo (debe aceptar imágenes para usar fotos)</label><input id="am" value="${esc(a.model)}">
+<button class="pri" id="sa">Guardar IA</button><p class="mut">La clave se guarda solo en este teléfono. Cualquier servicio con API compatible con OpenAI funciona (OpenAI, Gemini, OpenRouter, Groq, Ollama...).</p></div>
+<div class="card"><h2>Coach IA</h2><div class="row"><button class="sec" data-ai="sem">Analizar mi semana</button><button class="sec" data-ai="mes">Analizar mi mes</button></div><label style="margin-top:10px">O pregúntale algo</label><textarea id="q" rows="2" placeholder="¿Qué ceno hoy para llegar a mi proteína?"></textarea><button class="pri" data-ai="q">Preguntar</button></div><div class="card ai" id="ao">${esc(aiOut)||'<span class="mut">Aquí aparecerá la respuesta.</span>'}</div>`}
+v.innerHTML=h}
+const shrink=f=>new Promise((ok,no)=>{const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{const s=Math.min(1,1024/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.8))};im.onerror=no;im.src=u});
+const fill=r=>['k','p','c','f'].forEach((id,i)=>document.getElementById(id).value=Math.round(r[['kcal','p','c','f'][i]]||0));
+document.addEventListener('click',async e=>{const t=e.target,g=id=>document.getElementById(id);
+if(t.dataset.t){tab=t.dataset.t;render()}
+if(t.dataset.del){S.meals=S.meals.filter(m=>m.id!=t.dataset.del);save();render()}
+if(t.dataset.dw){S.weights=S.weights.filter(w=>w.date!==t.dataset.dw);save();render()}
+if(t.id==='add'){const n=g('n').value.trim(),v=id=>+g(id).value||0;if(!n)return;
+S.meals.push({id:Date.now(),date:g('d').value||today(),type:g('ty').value,name:n,kcal:v('k'),p:v('p'),c:v('c'),f:v('f')});save();render()}
+if(t.id==='aw'){const k=parseFloat(g('kg').value);if(!k)return;const d=g('wd').value||today();S.weights=S.weights.filter(w=>w.date!==d).concat({date:d,kg:k}).sort((a,b)=>a.date<b.date?-1:1);save();render()}
+if(t.id==='sg'){M.forEach(([k])=>S.goals[k]=+g('g'+k).value||0);save();t.textContent='¡Guardado!'}
+if(t.id==='sa'){S.ai={preset:g('pr').value,url:g('au').value.trim(),key:g('ak').value.trim(),model:g('am').value.trim()};save();t.textContent='¡Guardado!'}
+if(t.id==='ph')g('pf').click();
+if(t.id==='est'){const n=g('n').value.trim(),st=g('st');if(!n){st.textContent='Primero escribe qué comiste.';return}
+try{st.textContent='Estimando…';fill(await callAI('Estima los macros de esta comida (porción típica si no hay cantidades). Responde SOLO JSON con números: {"kcal":0,"p":0,"c":0,"f":0} (p=proteína g, c=carbohidratos g, f=grasa g). Comida: '+n,true));st.textContent='Estimación lista; ajústala si quieres.'}catch(err){st.textContent=err.message}}
+if(t.dataset.ai){const o=g('ao'),w=t.dataset.ai,t0=today();let p;
+const ctx=(a,b,d)=>`Metas diarias: ${JSON.stringify(S.goals)}. Días del periodo: ${d}. Comidas: ${JSON.stringify(inR(a,b).map(({date,type,name,kcal,p,c,f})=>({date,type,name,kcal,p,c,f})))}`;
+if(w==='sem'){const a=monday(t0);p='Analiza mi semana de alimentación vs mis metas y dame 3 recomendaciones concretas. Sé breve y en español. '+ctx(a,addD(a,6),7)}
+else if(w==='mes'){const a=t0.slice(0,8)+'01',n=dim(t0);p='Analiza mi mes de alimentación vs mis metas y dame 3 recomendaciones concretas. Sé breve y en español. '+ctx(a,t0.slice(0,8)+n,n)}
+else{const q=g('q').value.trim();if(!q)return;p='Eres mi coach de nutrición práctico. Responde breve y en español. Mis metas diarias: '+JSON.stringify(S.goals)+'. Hoy llevo: '+JSON.stringify(sum(inR(t0,t0)))+'. Pregunta: '+q}
+try{o.textContent='Pensando…';aiOut=await callAI(p);o.textContent=aiOut}catch(err){o.textContent=err.message}}
+if(t.id==='ex'){const a=document.createElement('a'),d=Object.assign({},S,{ai:undefined});a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.download='mis-macros.json';a.click()}
+if(t.id==='im')g('imf').click();
+});
+document.addEventListener('change',async e=>{const t=e.target,f=t.files&&t.files[0];if(!f)return;
+if(t.id==='imf'){try{const d=JSON.parse(await f.text());S.goals=d.goals||S.goals;S.meals=d.meals||[];S.weights=d.weights||[];save();render()}catch(err){alert('Archivo no válido')}t.value=''}
+if(t.id==='pf'){const st=document.getElementById('st');t.value='';
+try{st.textContent='Analizando la foto…';const img=await shrink(f);
+const r=await callAI([{type:'text',text:'Mira la foto de esta comida. Identifica los alimentos y estima los macros de la porción que se ve. Responde SOLO JSON: {"name":"descripción breve en español","kcal":0,"p":0,"c":0,"f":0} (p=proteína g, c=carbohidratos g, f=grasa g).'},{type:'image_url',image_url:{url:img}}],true);
+const n=document.getElementById('n');if(!n.value.trim())n.value=r.name||'';fill(r);
+st.textContent='Estimación lista; revisa y ajusta antes de guardar. La foto no se guarda.'}catch(err){st.textContent=err.message}}});
+document.addEventListener('change',e=>{if(e.target.id==='pr'){const p=PRE[e.target.value];if(p&&p[0]){document.getElementById('au').value=p[0];document.getElementById('am').value=p[1]}}});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+render();
+</script>
+</body>
+</html>

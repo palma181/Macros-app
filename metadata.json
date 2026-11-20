@@ -1,0 +1,6 @@
+{
+  "name": "Mis Macros",
+  "description": "Seguimiento diario de calorías, macros y peso corporal con análisis de texto y fotos mediante IA compatible con OpenAI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
