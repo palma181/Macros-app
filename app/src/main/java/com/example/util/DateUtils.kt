@@ -12,10 +12,10 @@ object DateUtils {
         }
 
     private val spanishDisplayFormat: SimpleDateFormat
-        get() = SimpleDateFormat("EEE d MMM", Locale("es", "ES"))
+        get() = SimpleDateFormat("EEE d MMM", Locale.forLanguageTag("es-ES"))
 
     private val spanishMonthFormat: SimpleDateFormat
-        get() = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
+        get() = SimpleDateFormat("MMMM yyyy", Locale.forLanguageTag("es-ES"))
 
     fun todayIso(): String = isoFormat.format(Calendar.getInstance().time)
 
