@@ -162,4 +162,60 @@ class OpenAiClientTest {
         assertTrue(msg.contains("401"))
         assertTrue(msg.contains("Incorrect API key"))
     }
+
+    @Test
+    fun `generateRecipesFromIngredients parses basic intermediate and advanced recipes`() = runTest {
+        nextStatusCode = 200
+        nextResponseBody = JSONObject().apply {
+            put(
+                "choices",
+                org.json.JSONArray().put(
+                    JSONObject().put(
+                        "message",
+                        JSONObject().put(
+                            "content",
+                            """
+                            {
+                              "recipes": [
+                                {
+                                  "title": "Fettuccini con pollo rápido",
+                                  "difficulty": "basico",
+                                  "prepMinutes": 18,
+                                  "ingredients": ["90g fettuccini", "150g pollo"],
+                                  "steps": ["Cuece la pasta", "Asa el pollo y mezcla"],
+                                  "tips": "Guarda agua de cocción",
+                                  "kcal": 510,
+                                  "p": 42,
+                                  "c": 58,
+                                  "f": 10
+                                }
+                              ]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                )
+            )
+        }.toString()
+
+        val client = OpenAiClient()
+        val config = AiConfig(
+            preset = AiPreset.OPENAI,
+            baseUrl = baseUrl,
+            apiKey = "sk-test",
+            model = "gpt-4o-mini"
+        )
+        val result = client.generateRecipesFromIngredients(
+            config = config,
+            ingredients = listOf("Pollo", "Fettuccini"),
+            difficulty = null
+        )
+        assertTrue(result.isSuccess)
+        val recipes = result.getOrThrow()
+        assertEquals(1, recipes.size)
+        assertEquals("Fettuccini con pollo rápido", recipes.first().title)
+        assertEquals(com.example.data.model.RecipeDifficulty.BASIC, recipes.first().difficulty)
+        assertEquals(2, recipes.first().steps.size)
+        assertEquals(510, recipes.first().kcal)
+    }
 }

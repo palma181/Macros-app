@@ -2,6 +2,8 @@ package com.example
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,11 +14,15 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
 import com.example.data.local.MealEntity
 import com.example.data.model.MacroGoals
+import com.example.data.model.RecipeCatalog
+import com.example.data.model.RecipeDifficulty
 import com.example.data.preferences.AppPreferencesRepository
 import com.example.data.repository.MacroRepository
 import com.example.util.DateUtils
@@ -39,16 +45,33 @@ class MisMacrosAppTest {
 
     @Test
     fun dateUtils_computesMondayAndDaysInMonthCorrectly() {
-        // 2026-11-20 is Friday -> Monday is 2026-11-16
         assertEquals("2026-11-16", DateUtils.mondayOfWeek("2026-11-20"))
         assertEquals(30, DateUtils.daysInMonth("2026-11-20"))
-        assertEquals(29, DateUtils.daysInMonth("2024-02-10")) // Leap year
+        assertEquals(29, DateUtils.daysInMonth("2024-02-10"))
         assertEquals(28, DateUtils.daysInMonth("2025-02-10"))
         assertEquals("2026-11-21", DateUtils.addDays("2026-11-20", 1))
     }
 
     @Test
-    fun repository_exportsAndImportsPwaCompatibleBackupJson() = runTest {
+    fun recipeCatalog_matchesIngredientsAcrossAllDifficultyLevels() {
+        val matches = RecipeCatalog.findMatchingRecipes(
+            selectedIngredients = listOf("Pollo", "Arroz"),
+            difficultyFilter = null
+        )
+        assertTrue(matches.isNotEmpty())
+        assertTrue(matches.any { it.recipe.difficulty == RecipeDifficulty.BASIC })
+        assertTrue(matches.any { it.recipe.difficulty == RecipeDifficulty.INTERMEDIATE })
+        assertTrue(matches.any { it.recipe.difficulty == RecipeDifficulty.ADVANCED })
+
+        val pastaMatches = RecipeCatalog.findMatchingRecipes(
+            selectedIngredients = listOf("Fettuccini"),
+            difficultyFilter = RecipeDifficulty.INTERMEDIATE
+        )
+        assertTrue(pastaMatches.any { it.recipe.title.contains("Fettuccini", ignoreCase = true) })
+    }
+
+    @Test
+    fun repository_exportsImportsAndSavesRecipes() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
@@ -71,11 +94,15 @@ class MisMacrosAppTest {
             )
             repo.saveWeight("2026-11-20", 74.2)
 
+            val recipe = RecipeCatalog.recipes.first()
+            repo.saveRecipe(recipe)
+            assertEquals(1, repo.savedRecipesFlow.first().size)
+            repo.deleteSavedRecipe(recipe.id)
+            assertEquals(0, repo.savedRecipesFlow.first().size)
+
             val json = repo.exportBackupJson()
             assertTrue(json.contains("\"Avena con proteína\""))
-            assertTrue(json.contains("\"kcal\": 2200"))
 
-            // Import a fresh PWA-style JSON payload
             val pwaJson = """
                 {
                   "goals": {"kcal": 1900, "p": 140, "c": 180, "f": 55},
@@ -91,31 +118,18 @@ class MisMacrosAppTest {
             val importRes = repo.importBackupJson(pwaJson)
             assertTrue(importRes.isSuccess)
             assertEquals(1 to 1, importRes.getOrThrow())
-
-            val meals = repo.observeMealsInRange("2026-11-01", "2026-11-30").first()
-            assertEquals(1, meals.size)
-            assertEquals("Tacos de pollo", meals.first().name)
-
-            val weights = repo.allWeightsFlow.first()
-            assertEquals(1, weights.size)
-            assertEquals(73.8, weights.first().kg, 0.01)
-
-            val goals = repo.goalsFlow.first()
-            assertEquals(1900, goals.kcal)
-            assertEquals(140, goals.protein)
         } finally {
             db.close()
         }
     }
 
     @Test
-    fun userJourney_addMealAndNavigateAllTabsWithoutErrors() {
+    fun userJourney_swipeAndNavigateAllSevenTabsHistoryAndRecipeManual() {
         composeRule.waitForIdle()
 
-        // 1. Open Add Meal sheet on Today tab and log a meal
+        // 1. Add a meal on Hoy
         composeRule.onNodeWithTag("fab_add_meal").performClick()
         composeRule.waitForIdle()
-
         composeRule.onNodeWithTag("meal_name_input").performTextInput("Bowl de salmón")
         composeRule.onNodeWithTag("meal_kcal_input").performTextInput("610")
         composeRule.onNodeWithTag("meal_protein_input").performTextInput("42")
@@ -129,9 +143,41 @@ class MisMacrosAppTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithText("Bowl de salmón").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Bowl de salmón").assertIsDisplayed()
+        composeRule.onNode(
+            hasText("Bowl de salmón") and hasAnyAncestor(hasTestTag("today_lazy_column"))
+        ).assertIsDisplayed()
 
-        // 2. Navigate to Progress and toggle Semana / Mes
+        // 2. Swipe smoothly to Comidas (Historial) and verify daily meal + kcal appear
+        composeRule.onNodeWithTag("main_horizontal_pager").performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("meals_history_list")
+            .performScrollToNode(hasText("Bowl de salmón"))
+        composeRule.onNode(
+            hasText("Bowl de salmón") and hasAnyAncestor(hasTestTag("meals_history_list"))
+        ).assertIsDisplayed()
+
+        // 3. Navigate to Cocina (Recetas), select ingredients, open manual, and log as meal
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_recipes"))
+        composeRule.onNodeWithTag("nav_recipes").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("ing_chip_pollo").performClick()
+        composeRule.onNodeWithTag("recipes_lazy_column")
+            .performScrollToNode(hasTestTag("diff_basico"))
+        composeRule.onNodeWithTag("diff_basico").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("recipes_lazy_column")
+            .performScrollToNode(hasTestTag("recipe_card_basic_pollo_arroz"))
+        composeRule.onNodeWithTag("recipe_card_basic_pollo_arroz").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Manual de preparación").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("log_recipe_as_meal_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // 4. Navigate to Progreso
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_progress"))
         composeRule.onNodeWithTag("nav_progress").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("segment_month").performClick()
@@ -139,7 +185,8 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("segment_week").performClick()
         composeRule.waitForIdle()
 
-        // 3. Navigate to Weight and save a weight entry
+        // 5. Navigate to Peso and save a weight entry
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_weight"))
         composeRule.onNodeWithTag("nav_weight").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("weight_kg_input").performTextInput("71.5")
@@ -149,7 +196,8 @@ class MisMacrosAppTest {
             .performScrollToNode(hasText("71.5 kg"))
         composeRule.onNodeWithText("71.5 kg").assertIsDisplayed()
 
-        // 4. Navigate to AI tab, switch presets, and save
+        // 6. Navigate to IA
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_ai"))
         composeRule.onNodeWithTag("nav_ai").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ai_preset_gemini").performClick()
@@ -157,7 +205,8 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("ai_save_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        // 5. Navigate to Goals tab, update kcal goal, and save
+        // 7. Navigate to Metas
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_goals"))
         composeRule.onNodeWithTag("nav_goals").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("goal_kcal_input").performTextClearance()

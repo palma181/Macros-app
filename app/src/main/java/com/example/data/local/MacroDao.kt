@@ -56,6 +56,15 @@ interface MacroDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWeights(weights: List<WeightEntity>)
 
+    @Query("SELECT * FROM saved_recipes ORDER BY createdAt DESC")
+    fun observeSavedRecipes(): Flow<List<SavedRecipeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSavedRecipe(recipe: SavedRecipeEntity)
+
+    @Query("DELETE FROM saved_recipes WHERE id = :id")
+    suspend fun deleteSavedRecipeById(id: String)
+
     @Transaction
     suspend fun replaceBackupData(meals: List<MealEntity>, weights: List<WeightEntity>) {
         clearAllMeals()

@@ -13,6 +13,10 @@ import com.example.data.model.DayCalories
 import com.example.data.model.MacroGoals
 import com.example.data.model.MacroTotals
 import com.example.data.model.MealType
+import com.example.data.model.RecipeCatalog
+import com.example.data.model.RecipeDifficulty
+import com.example.data.model.RecipeMatchResult
+import com.example.data.model.RecipeOption
 import com.example.data.preferences.AppPreferencesRepository
 import com.example.data.repository.MacroRepository
 import com.example.util.DateUtils
@@ -21,7 +25,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -66,11 +69,23 @@ data class PeriodSummary(
     val dailyBreakdown: List<DayCalories> = emptyList()
 )
 
+data class RecipeStudioState(
+    val selectedIngredients: List<String> = emptyList(),
+    val difficultyFilter: RecipeDifficulty? = null,
+    val catalogMatches: List<RecipeMatchResult> = RecipeCatalog.findMatchingRecipes(emptyList(), null),
+    val aiRecipes: List<RecipeOption> = emptyList(),
+    val savedRecipes: List<RecipeOption> = emptyList(),
+    val activeRecipeManual: RecipeOption? = null,
+    val isGeneratingAi: Boolean = false,
+    val aiError: String? = null
+)
+
 data class MacroUiState(
     val selectedDate: String = DateUtils.todayIso(),
     val goals: MacroGoals = MacroGoals(),
     val aiConfig: AiConfig = AiConfig(),
     val dayMeals: List<MealEntity> = emptyList(),
+    val allMeals: List<MealEntity> = emptyList(),
     val dayTotals: MacroTotals = MacroTotals(),
     val weekSummary: PeriodSummary = PeriodSummary(),
     val monthSummary: PeriodSummary = PeriodSummary(),
@@ -78,6 +93,7 @@ data class MacroUiState(
     val editor: MealEditorState = MealEditorState(),
     val coach: CoachState = CoachState(),
     val connectionTest: ConnectionTestState = ConnectionTestState(),
+    val recipeStudio: RecipeStudioState = RecipeStudioState(),
     val snackbarMessage: String? = null
 )
 
@@ -91,6 +107,7 @@ class MacroViewModel(
     private val coachFlow = MutableStateFlow(CoachState())
     private val connectionTestFlow = MutableStateFlow(ConnectionTestState())
     private val snackbarFlow = MutableStateFlow<String?>(null)
+    private val recipeStudioFlow = MutableStateFlow(RecipeStudioState())
 
     private val dayMealsFlow = selectedDateFlow.flatMapLatest { date ->
         repository.observeMealsInRange(date, date)
@@ -121,30 +138,45 @@ class MacroViewModel(
     private val periodDataFlow = combine(
         selectedDateFlow,
         weekMealsFlow,
-        monthMealsFlow
-    ) { date, weekMeals, monthMeals ->
-        buildPeriods(date, weekMeals, monthMeals)
+        monthMealsFlow,
+        repository.allMealsFlow
+    ) { date, weekMeals, monthMeals, allMeals ->
+        PeriodBundle(
+            periods = buildPeriods(date, weekMeals, monthMeals),
+            allMeals = allMeals
+        )
+    }
+
+    private val fullRecipeStudioFlow = combine(
+        recipeStudioFlow,
+        repository.savedRecipesFlow
+    ) { studio, savedEntities ->
+        studio.copy(savedRecipes = savedEntities.map { RecipeOption.fromSavedEntity(it) })
     }
 
     val uiState: StateFlow<MacroUiState> = combine(
         coreDataFlow,
         periodDataFlow,
         editorFlow,
-        coachFlow,
-        combine(connectionTestFlow, snackbarFlow) { a, b -> a to b }
-    ) { core, periods, editor, coach, (connTest, snack) ->
+        combine(coachFlow, connectionTestFlow, snackbarFlow) { coach, conn, snack ->
+            Triple(coach, conn, snack)
+        },
+        fullRecipeStudioFlow
+    ) { core, periodBundle, editor, (coach, connTest, snack), recipeStudio ->
         MacroUiState(
             selectedDate = core.selectedDate,
             goals = core.goals,
             aiConfig = core.aiConfig,
             dayMeals = core.dayMeals,
+            allMeals = periodBundle.allMeals,
             dayTotals = sumMeals(core.dayMeals),
-            weekSummary = periods.first,
-            monthSummary = periods.second,
+            weekSummary = periodBundle.periods.first,
+            monthSummary = periodBundle.periods.second,
             weights = core.weights,
             editor = editor,
             coach = coach,
             connectionTest = connTest,
+            recipeStudio = recipeStudio,
             snackbarMessage = snack
         )
     }.stateIn(
@@ -159,6 +191,11 @@ class MacroViewModel(
         val aiConfig: AiConfig,
         val dayMeals: List<MealEntity>,
         val weights: List<WeightEntity>
+    )
+
+    private data class PeriodBundle(
+        val periods: Pair<PeriodSummary, PeriodSummary>,
+        val allMeals: List<MealEntity>
     )
 
     private fun sumMeals(meals: List<MealEntity>): MacroTotals =
@@ -375,10 +412,153 @@ class MacroViewModel(
         }
     }
 
+    fun repeatMealForToday(meal: MealEntity) {
+        val today = DateUtils.todayIso()
+        viewModelScope.launch {
+            repository.insertMeal(
+                meal.copy(
+                    id = 0L,
+                    date = today,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+            selectedDateFlow.value = today
+            showSnackbar("Repetido hoy: ${meal.name}")
+        }
+    }
+
     fun deleteMeal(id: Long) {
         viewModelScope.launch {
             repository.deleteMeal(id)
             showSnackbar("Comida eliminada")
+        }
+    }
+
+    // === Recipe Studio ===
+    fun toggleIngredient(ingredient: String) {
+        recipeStudioFlow.update { current ->
+            val exists = current.selectedIngredients.any { it.equals(ingredient, ignoreCase = true) }
+            val updated = if (exists) {
+                current.selectedIngredients.filterNot { it.equals(ingredient, ignoreCase = true) }
+            } else {
+                current.selectedIngredients + ingredient
+            }
+            current.copy(
+                selectedIngredients = updated,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter),
+                aiError = null
+            )
+        }
+    }
+
+    fun addCustomIngredient(raw: String) {
+        val clean = raw.trim()
+        if (clean.isBlank()) return
+        recipeStudioFlow.update { current ->
+            val exists = current.selectedIngredients.any { it.equals(clean, ignoreCase = true) }
+            val updated = if (exists) current.selectedIngredients else current.selectedIngredients + clean
+            current.copy(
+                selectedIngredients = updated,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter),
+                aiError = null
+            )
+        }
+    }
+
+    fun clearIngredients() {
+        recipeStudioFlow.update { current ->
+            current.copy(
+                selectedIngredients = emptyList(),
+                catalogMatches = RecipeCatalog.findMatchingRecipes(emptyList(), current.difficultyFilter),
+                aiRecipes = emptyList(),
+                aiError = null
+            )
+        }
+    }
+
+    fun setDifficultyFilter(difficulty: RecipeDifficulty?) {
+        recipeStudioFlow.update { current ->
+            current.copy(
+                difficultyFilter = difficulty,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(current.selectedIngredients, difficulty)
+            )
+        }
+    }
+
+    fun generateAiRecipes() {
+        val ingredients = recipeStudioFlow.value.selectedIngredients
+        if (ingredients.isEmpty()) {
+            recipeStudioFlow.update {
+                it.copy(aiError = "Elige o escribe al menos un ingrediente para generar recetas con IA.")
+            }
+            return
+        }
+        val difficulty = recipeStudioFlow.value.difficultyFilter
+        viewModelScope.launch {
+            recipeStudioFlow.update { it.copy(isGeneratingAi = true, aiError = null) }
+            repository.generateAiRecipes(ingredients, difficulty).fold(
+                onSuccess = { list ->
+                    recipeStudioFlow.update {
+                        it.copy(isGeneratingAi = false, aiRecipes = list, aiError = null)
+                    }
+                },
+                onFailure = { err ->
+                    recipeStudioFlow.update {
+                        it.copy(
+                            isGeneratingAi = false,
+                            aiError = err.message ?: "No se pudieron generar recetas con IA"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun openRecipeManual(recipe: RecipeOption) {
+        recipeStudioFlow.update { it.copy(activeRecipeManual = recipe) }
+    }
+
+    fun closeRecipeManual() {
+        recipeStudioFlow.update { it.copy(activeRecipeManual = null) }
+    }
+
+    fun saveRecipeToFavorites(recipe: RecipeOption) {
+        viewModelScope.launch {
+            repository.saveRecipe(recipe)
+            showSnackbar("Receta guardada: ${recipe.title}")
+        }
+    }
+
+    fun deleteSavedRecipe(id: String) {
+        viewModelScope.launch {
+            repository.deleteSavedRecipe(id)
+            showSnackbar("Receta eliminada de guardadas")
+        }
+    }
+
+    fun logRecipeAsMeal(
+        recipe: RecipeOption,
+        mealType: MealType,
+        date: String,
+        alsoSaveRecipe: Boolean
+    ) {
+        viewModelScope.launch {
+            if (alsoSaveRecipe) {
+                repository.saveRecipe(recipe)
+            }
+            repository.insertMeal(
+                MealEntity(
+                    date = date,
+                    mealType = mealType.label,
+                    name = recipe.title,
+                    kcal = recipe.kcal,
+                    protein = recipe.protein,
+                    carbs = recipe.carbs,
+                    fat = recipe.fat
+                )
+            )
+            selectedDateFlow.value = date
+            showSnackbar("Guardada como ${mealType.label}: ${recipe.title}")
         }
     }
 

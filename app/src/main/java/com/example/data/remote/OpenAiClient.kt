@@ -94,6 +94,67 @@ class OpenAiClient {
         }
     }
 
+    suspend fun generateRecipesFromIngredients(
+        config: AiConfig,
+        ingredients: List<String>,
+        difficulty: com.example.data.model.RecipeDifficulty?
+    ): Result<List<com.example.data.model.RecipeOption>> {
+        val levelInstruction = when (difficulty) {
+            null -> "Incluye exactamente 3 opciones: una de nivel Básico, una Intermedio y una Avanzado."
+            else -> "Incluye 3 opciones variadas de nivel ${difficulty.label}."
+        }
+        val prompt = buildString {
+            append("Eres chef y nutricionista. Con estos ingredientes disponibles: ")
+            append(ingredients.joinToString(", "))
+            append(". ")
+            append(levelInstruction)
+            append(" Responde ÚNICAMENTE con un JSON válido con esta estructura exacta: ")
+            append(
+                """{"recipes":[{"title":"...","difficulty":"basico|intermedio|avanzado","prepMinutes":20,"ingredients":["..."],"steps":["Paso 1...","Paso 2..."],"tips":"...","kcal":450,"p":35,"c":45,"f":12}]}"""
+            )
+        }
+        return sendChatCompletion(
+            config = config,
+            content = prompt,
+            maxTokens = 1400
+        ).mapCatching { rawText ->
+            val match = Regex("""\{[\s\S]*\}""").find(rawText)
+                ?: throw IllegalStateException("La IA no devolvió un JSON válido de recetas.")
+            val root = JSONObject(match.value)
+            val arr = root.optJSONArray("recipes")
+                ?: throw IllegalStateException("No se encontró el campo recipes en la respuesta.")
+            val list = mutableListOf<com.example.data.model.RecipeOption>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val ingArr = obj.optJSONArray("ingredients") ?: JSONArray()
+                val ingList = (0 until ingArr.length()).map { idx -> ingArr.optString(idx) }.filter { it.isNotBlank() }
+                val stepsArr = obj.optJSONArray("steps") ?: JSONArray()
+                val stepList = (0 until stepsArr.length()).map { idx -> stepsArr.optString(idx) }.filter { it.isNotBlank() }
+                val diff = com.example.data.model.RecipeDifficulty.fromId(obj.optString("difficulty", "basico"))
+                val title = obj.optString("title", "Receta sugerida").trim()
+                list.add(
+                    com.example.data.model.RecipeOption(
+                        id = "ai_${System.currentTimeMillis()}_$i",
+                        title = title,
+                        difficulty = diff,
+                        prepMinutes = obj.optInt("prepMinutes", 20).coerceIn(5, 180),
+                        matchTags = ingredients,
+                        ingredients = ingList,
+                        steps = stepList,
+                        tips = obj.optString("tips", "Ajusta sal y especias al gusto."),
+                        kcal = obj.optDouble("kcal", 400.0).roundToInt().coerceAtLeast(0),
+                        protein = obj.optDouble("p", 25.0).roundToInt().coerceAtLeast(0),
+                        carbs = obj.optDouble("c", 40.0).roundToInt().coerceAtLeast(0),
+                        fat = obj.optDouble("f", 12.0).roundToInt().coerceAtLeast(0),
+                        isAiGenerated = true
+                    )
+                )
+            }
+            if (list.isEmpty()) throw IllegalStateException("La IA no generó opciones de recetas.")
+            list
+        }
+    }
+
     private suspend fun sendChatCompletion(
         config: AiConfig,
         content: Any,

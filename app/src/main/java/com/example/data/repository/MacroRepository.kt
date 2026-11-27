@@ -28,6 +28,8 @@ class MacroRepository(
     val goalsFlow: Flow<MacroGoals> = prefs.goalsFlow
     val aiConfigFlow: Flow<AiConfig> = prefs.aiConfigFlow
     val allWeightsFlow: Flow<List<WeightEntity>> = dao.observeAllWeights()
+    val allMealsFlow: Flow<List<MealEntity>> = dao.observeAllMeals()
+    val savedRecipesFlow: Flow<List<com.example.data.local.SavedRecipeEntity>> = dao.observeSavedRecipes()
 
     fun observeMealsInRange(startDate: String, endDate: String): Flow<List<MealEntity>> =
         dao.observeMealsInRange(startDate, endDate)
@@ -37,6 +39,20 @@ class MacroRepository(
     suspend fun updateMeal(meal: MealEntity) = dao.updateMeal(meal)
 
     suspend fun deleteMeal(id: Long) = dao.deleteMealById(id)
+
+    suspend fun saveRecipe(recipe: com.example.data.model.RecipeOption) {
+        dao.upsertSavedRecipe(recipe.toSavedEntity())
+    }
+
+    suspend fun deleteSavedRecipe(id: String) = dao.deleteSavedRecipeById(id)
+
+    suspend fun generateAiRecipes(
+        ingredients: List<String>,
+        difficulty: com.example.data.model.RecipeDifficulty?
+    ): Result<List<com.example.data.model.RecipeOption>> {
+        val config = prefs.aiConfigFlow.first()
+        return openAiClient.generateRecipesFromIngredients(config, ingredients, difficulty)
+    }
 
     suspend fun saveWeight(date: String, kg: Double) {
         dao.upsertWeight(WeightEntity(date = date, kg = kg))
