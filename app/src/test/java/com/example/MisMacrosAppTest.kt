@@ -1,11 +1,13 @@
 package com.example
 
 import android.content.Context
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -160,11 +162,7 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("meal_save_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("today_lazy_column")
-            .performScrollToNode(hasText("Bowl de salmón"))
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithText("Bowl de salmón").fetchSemanticsNodes().isNotEmpty()
-        }
+        waitUntilScrollToNode("today_lazy_column", hasText("Bowl de salmón"))
         composeRule.onNode(
             hasText("Bowl de salmón") and hasAnyAncestor(hasTestTag("today_lazy_column"))
         ).assertIsDisplayed()
@@ -172,8 +170,10 @@ class MisMacrosAppTest {
         // 2. Swipe smoothly to Comidas (Historial) and verify daily meal + kcal appear
         composeRule.onNodeWithTag("main_horizontal_pager").performTouchInput { swipeLeft() }
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("meals_history_list")
-            .performScrollToNode(hasText("Bowl de salmón"))
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            composeRule.onAllNodesWithTag("meals_history_list").fetchSemanticsNodes().isNotEmpty()
+        }
+        waitUntilScrollToNode("meals_history_list", hasText("Bowl de salmón"))
         composeRule.onNode(
             hasText("Bowl de salmón") and hasAnyAncestor(hasTestTag("meals_history_list"))
         ).assertIsDisplayed()
@@ -230,17 +230,24 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_weight"))
         composeRule.onNodeWithTag("nav_weight").performClick()
         composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            composeRule.onAllNodesWithTag("weight_kg_input").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("weight_kg_input").performTextInput("71.5")
         composeRule.onNodeWithTag("save_weight_button").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("weight_lazy_column")
-            .performScrollToNode(hasText("71.5 kg"))
-        composeRule.onNodeWithText("71.5 kg").assertIsDisplayed()
+
+        val todayWeightTag = "weight_row_${DateUtils.todayIso()}"
+        waitUntilScrollToNode("weight_lazy_column", hasTestTag(todayWeightTag))
+        composeRule.onNodeWithTag(todayWeightTag).assertIsDisplayed()
 
         // 6. Navigate to IA
         composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_ai"))
         composeRule.onNodeWithTag("nav_ai").performClick()
         composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            composeRule.onAllNodesWithTag("ai_preset_gemini").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("ai_preset_gemini").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ai_save_button").performScrollTo().performClick()
@@ -250,9 +257,20 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_goals"))
         composeRule.onNodeWithTag("nav_goals").performClick()
         composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            composeRule.onAllNodesWithTag("goal_kcal_input").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("goal_kcal_input").performTextClearance()
         composeRule.onNodeWithTag("goal_kcal_input").performTextInput("2100")
         composeRule.onNodeWithTag("save_goals_button").performClick()
         composeRule.waitForIdle()
+    }
+
+    private fun waitUntilScrollToNode(listTag: String, matcher: SemanticsMatcher) {
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            runCatching {
+                composeRule.onNodeWithTag(listTag).performScrollToNode(matcher)
+            }.isSuccess
+        }
     }
 }

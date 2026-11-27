@@ -53,6 +53,7 @@ import com.example.data.local.WeightEntity
 import com.example.ui.MacroUiState
 import com.example.ui.components.WeightLineChart
 import com.example.util.DateUtils
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -204,10 +205,10 @@ fun WeightScreen(
                                     val deltaText = if (first != null && weightsAsc.size > 1) {
                                         val diff = latest.kg - first.kg
                                         val sign = if (diff > 0) "+" else ""
-                                        " · $sign${"%.1f".format(diff)} kg"
+                                        " · $sign${String.format(Locale.US, "%.1f", diff)} kg"
                                     } else ""
                                     Text(
-                                        text = "${"%.1f".format(latest.kg)} kg$deltaText",
+                                        text = "${String.format(Locale.US, "%.1f", latest.kg)} kg$deltaText",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -274,7 +275,9 @@ private fun WeightHistoryRow(
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("weight_row_${item.date}")
     ) {
         Row(
             modifier = Modifier
@@ -285,7 +288,7 @@ private fun WeightHistoryRow(
         ) {
             Column {
                 Text(
-                    text = "${"%.1f".format(item.kg)} kg",
+                    text = "${String.format(Locale.US, "%.1f", item.kg)} kg",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
