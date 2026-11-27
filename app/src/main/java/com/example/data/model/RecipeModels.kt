@@ -2,6 +2,18 @@ package com.example.data.model
 
 import com.example.data.local.SavedRecipeEntity
 
+enum class RecipeSection(val id: String, val label: String) {
+    MEALS("platillos", "Platillos"),
+    SNACKS_DRINKS("snacks_bebidas", "Snacks y Bebidas");
+
+    companion object {
+        fun fromId(id: String): RecipeSection =
+            entries.firstOrNull {
+                it.id.equals(id, ignoreCase = true) || it.label.equals(id, ignoreCase = true)
+            } ?: MEALS
+    }
+}
+
 enum class RecipeDifficulty(val id: String, val label: String) {
     BASIC("basico", "Básico"),
     INTERMEDIATE("intermedio", "Intermedio"),
@@ -33,6 +45,7 @@ data class RecipeOption(
     val protein: Int,
     val carbs: Int,
     val fat: Int,
+    val section: RecipeSection = RecipeSection.MEALS,
     val isAiGenerated: Boolean = false
 ) {
     fun toSavedEntity(): SavedRecipeEntity = SavedRecipeEntity(
@@ -46,7 +59,8 @@ data class RecipeOption(
         kcal = kcal,
         protein = protein,
         carbs = carbs,
-        fat = fat
+        fat = fat,
+        section = section.id
     )
 
     companion object {
@@ -62,7 +76,8 @@ data class RecipeOption(
             kcal = entity.kcal,
             protein = entity.protein,
             carbs = entity.carbs,
-            fat = entity.fat
+            fat = entity.fat,
+            section = RecipeSection.fromId(entity.section)
         )
     }
 }

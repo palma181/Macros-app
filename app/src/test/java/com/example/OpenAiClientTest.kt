@@ -218,4 +218,58 @@ class OpenAiClientTest {
         assertEquals(2, recipes.first().steps.size)
         assertEquals(510, recipes.first().kcal)
     }
+
+    @Test
+    fun `generateRecipesFromIngredients for SNACKS_DRINKS prompts for smoothies and supplements`() = runTest {
+        nextStatusCode = 200
+        nextResponseBody = JSONObject().apply {
+            put(
+                "choices",
+                org.json.JSONArray().put(
+                    JSONObject().put(
+                        "message",
+                        JSONObject().put(
+                            "content",
+                            """
+                            {
+                              "recipes": [
+                                {
+                                  "title": "Batido post-entreno de fresa, whey y creatina",
+                                  "difficulty": "basico",
+                                  "prepMinutes": 5,
+                                  "ingredients": ["100g fresa", "1 scoop whey", "5g creatina"],
+                                  "steps": ["Licúa todo con hielo"],
+                                  "tips": "Tómalo frío",
+                                  "kcal": 240,
+                                  "p": 27,
+                                  "c": 22,
+                                  "f": 3
+                                }
+                              ]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                )
+            )
+        }.toString()
+
+        val client = OpenAiClient()
+        val config = AiConfig(
+            preset = AiPreset.OPENAI,
+            baseUrl = baseUrl,
+            apiKey = "sk-test",
+            model = "gpt-4o-mini"
+        )
+        val result = client.generateRecipesFromIngredients(
+            config = config,
+            ingredients = listOf("Fresa", "Proteína Whey", "Creatina"),
+            difficulty = com.example.data.model.RecipeDifficulty.BASIC,
+            section = com.example.data.model.RecipeSection.SNACKS_DRINKS
+        )
+        assertTrue(result.isSuccess)
+        val recipe = result.getOrThrow().first()
+        assertEquals(com.example.data.model.RecipeSection.SNACKS_DRINKS, recipe.section)
+        assertTrue(lastRequestBody.contains("suplementos"))
+    }
 }

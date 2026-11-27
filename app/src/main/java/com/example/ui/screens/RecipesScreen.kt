@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material.icons.outlined.Schedule
@@ -75,6 +77,7 @@ import com.example.data.model.MealType
 import com.example.data.model.RecipeCatalog
 import com.example.data.model.RecipeDifficulty
 import com.example.data.model.RecipeOption
+import com.example.data.model.RecipeSection
 import com.example.ui.MacroUiState
 import com.example.ui.theme.LocalMacroColors
 import com.example.util.DateUtils
@@ -83,6 +86,7 @@ import com.example.util.DateUtils
 @Composable
 fun RecipesScreen(
     uiState: MacroUiState,
+    onSelectSection: (RecipeSection) -> Unit,
     onToggleIngredient: (String) -> Unit,
     onAddCustomIngredient: (String) -> Unit,
     onClearIngredients: () -> Unit,
@@ -97,6 +101,7 @@ fun RecipesScreen(
 ) {
     val studio = uiState.recipeStudio
     var customIngredient by rememberSaveable { mutableStateOf("") }
+    val isSnacksSection = studio.activeSection == RecipeSection.SNACKS_DRINKS
 
     val savedIds = remember(studio.savedRecipes) {
         studio.savedRecipes.map { it.id }.toSet()
@@ -114,6 +119,14 @@ fun RecipesScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Section switcher: Platillos vs Snacks y Bebidas
+            item {
+                RecipeSectionSegmentedBar(
+                    activeSection = studio.activeSection,
+                    onSelectSection = onSelectSection
+                )
+            }
+
             // Header + Custom ingredient input + categorized chips
             item {
                 Card(
@@ -130,17 +143,29 @@ fun RecipesScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                Icons.Outlined.RestaurantMenu,
+                                imageVector = if (isSnacksSection) {
+                                    Icons.Outlined.LocalCafe
+                                } else {
+                                    Icons.Outlined.RestaurantMenu
+                                },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Column {
                                 Text(
-                                    text = "Cocina por ingredientes",
+                                    text = if (isSnacksSection) {
+                                        "Snacks, fruta, batidos y suplementos"
+                                    } else {
+                                        "Cocina por ingredientes"
+                                    },
                                     style = MaterialTheme.typography.titleLarge
                                 )
                                 Text(
-                                    text = "Elige tus ingredientes, escoge receta y abre su manual paso a paso",
+                                    text = if (isSnacksSection) {
+                                        "Combina frutas, suplementos y bases para preparar batidos o snacks paso a paso"
+                                    } else {
+                                        "Elige tus ingredientes, escoge receta y abre su manual paso a paso"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -156,7 +181,15 @@ fun RecipesScreen(
                             OutlinedTextField(
                                 value = customIngredient,
                                 onValueChange = { customIngredient = it },
-                                placeholder = { Text("Ej. camarón, quinoa, calabaza...") },
+                                placeholder = {
+                                    Text(
+                                        if (isSnacksSection) {
+                                            "Ej. kiwi, espirulina, magnesio, granola..."
+                                        } else {
+                                            "Ej. camarón, quinoa, calabaza..."
+                                        }
+                                    )
+                                },
                                 label = { Text("Agregar otro ingrediente") },
                                 singleLine = true,
                                 modifier = Modifier
@@ -221,8 +254,8 @@ fun RecipesScreen(
                             }
                         }
 
-                        // Categorized ingredient chips
-                        RecipeCatalog.ingredientGroups.forEach { group ->
+                        // Categorized ingredient chips for active section
+                        RecipeCatalog.ingredientGroupsFor(studio.activeSection).forEach { group ->
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
                                     text = group.title,
@@ -313,7 +346,13 @@ fun RecipesScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Crear más opciones con IA (Básico / Intermedio / Avanzado)")
+                            Text(
+                                if (isSnacksSection) {
+                                    "Crear más batidos o snacks con IA"
+                                } else {
+                                    "Crear más opciones con IA (Básico / Intermedio / Avanzado)"
+                                }
+                            )
                         }
                     }
 
@@ -368,10 +407,13 @@ fun RecipesScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (studio.selectedIngredients.isEmpty()) {
-                            "Recetario (${studio.catalogMatches.size} platillos)"
-                        } else {
-                            "Opciones recomendadas (${studio.catalogMatches.size})"
+                        text = when {
+                            studio.selectedIngredients.isNotEmpty() ->
+                                "Opciones recomendadas (${studio.catalogMatches.size})"
+                            isSnacksSection ->
+                                "Snacks y batidos (${studio.catalogMatches.size} opciones)"
+                            else ->
+                                "Recetario (${studio.catalogMatches.size} platillos)"
                         },
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -602,8 +644,9 @@ private fun SavedRecipeRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                val sectionTag = if (recipe.section == RecipeSection.SNACKS_DRINKS) "Snacks/Bebidas · " else ""
                 Text(
-                    text = "${recipe.difficulty.label} · ${recipe.kcal} kcal · P${recipe.protein} C${recipe.carbs} G${recipe.fat}",
+                    text = "$sectionTag${recipe.difficulty.label} · ${recipe.kcal} kcal · P${recipe.protein} C${recipe.carbs} G${recipe.fat}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -619,6 +662,86 @@ private fun SavedRecipeRow(
     }
 }
 
+@Composable
+private fun RecipeSectionSegmentedBar(
+    activeSection: RecipeSection,
+    onSelectSection: (RecipeSection) -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            RecipeSection.entries.forEach { section ->
+                val selected = activeSection == section
+                val bgColor by animateColorAsState(
+                    targetValue = if (selected) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        Color.Transparent
+                    },
+                    label = "recipe_section_bg_${section.id}"
+                )
+                val fgColor by animateColorAsState(
+                    targetValue = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    label = "recipe_section_fg_${section.id}"
+                )
+                val icon = if (section == RecipeSection.SNACKS_DRINKS) {
+                    Icons.Outlined.LocalCafe
+                } else {
+                    Icons.Outlined.RestaurantMenu
+                }
+
+                Surface(
+                    color = bgColor,
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = if (selected) 2.dp else 0.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSelectSection(section) }
+                        .testTag("section_${section.id}")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = fgColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = section.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = fgColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun RecipeManualBottomSheet(
@@ -629,8 +752,12 @@ private fun RecipeManualBottomSheet(
     onLogAsMeal: (MealType, Boolean) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedMealType by rememberSaveable { mutableStateOf(MealType.LUNCH) }
-    var alsoSaveToFavorites by rememberSaveable { mutableStateOf(true) }
+    var selectedMealType by rememberSaveable(recipe.id) {
+        mutableStateOf(
+            if (recipe.section == RecipeSection.SNACKS_DRINKS) MealType.SNACK else MealType.LUNCH
+        )
+    }
+    var alsoSaveToFavorites by rememberSaveable(recipe.id) { mutableStateOf(true) }
     val (badgeBg, badgeFg) = difficultyBadgeColors(recipe.difficulty)
 
     ModalBottomSheet(

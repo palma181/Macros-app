@@ -48,10 +48,11 @@ class MacroRepository(
 
     suspend fun generateAiRecipes(
         ingredients: List<String>,
-        difficulty: com.example.data.model.RecipeDifficulty?
+        difficulty: com.example.data.model.RecipeDifficulty?,
+        section: com.example.data.model.RecipeSection = com.example.data.model.RecipeSection.MEALS
     ): Result<List<com.example.data.model.RecipeOption>> {
         val config = prefs.aiConfigFlow.first()
-        return openAiClient.generateRecipesFromIngredients(config, ingredients, difficulty)
+        return openAiClient.generateRecipesFromIngredients(config, ingredients, difficulty, section)
     }
 
     suspend fun saveWeight(date: String, kg: Double) {

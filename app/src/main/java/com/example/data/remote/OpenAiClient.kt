@@ -97,20 +97,27 @@ class OpenAiClient {
     suspend fun generateRecipesFromIngredients(
         config: AiConfig,
         ingredients: List<String>,
-        difficulty: com.example.data.model.RecipeDifficulty?
+        difficulty: com.example.data.model.RecipeDifficulty?,
+        section: com.example.data.model.RecipeSection = com.example.data.model.RecipeSection.MEALS
     ): Result<List<com.example.data.model.RecipeOption>> {
         val levelInstruction = when (difficulty) {
             null -> "Incluye exactamente 3 opciones: una de nivel Básico, una Intermedio y una Avanzado."
             else -> "Incluye 3 opciones variadas de nivel ${difficulty.label}."
         }
+        val kindInstruction = when (section) {
+            com.example.data.model.RecipeSection.MEALS ->
+                "Eres chef y nutricionista. Crea platillos completos de cocina con estos ingredientes disponibles: "
+            com.example.data.model.RecipeSection.SNACKS_DRINKS ->
+                "Eres nutricionista deportivo y mixólogo saludable. Crea snacks, bowls de fruta, batidos o bebidas funcionales (aprovechando los suplementos si se incluyen) con estos ingredientes disponibles: "
+        }
         val prompt = buildString {
-            append("Eres chef y nutricionista. Con estos ingredientes disponibles: ")
+            append(kindInstruction)
             append(ingredients.joinToString(", "))
             append(". ")
             append(levelInstruction)
             append(" Responde ÚNICAMENTE con un JSON válido con esta estructura exacta: ")
             append(
-                """{"recipes":[{"title":"...","difficulty":"basico|intermedio|avanzado","prepMinutes":20,"ingredients":["..."],"steps":["Paso 1...","Paso 2..."],"tips":"...","kcal":450,"p":35,"c":45,"f":12}]}"""
+                """{"recipes":[{"title":"...","difficulty":"basico|intermedio|avanzado","prepMinutes":10,"ingredients":["..."],"steps":["Paso 1...","Paso 2..."],"tips":"...","kcal":320,"p":28,"c":35,"f":8}]}"""
             )
         }
         return sendChatCompletion(
@@ -137,15 +144,16 @@ class OpenAiClient {
                         id = "ai_${System.currentTimeMillis()}_$i",
                         title = title,
                         difficulty = diff,
-                        prepMinutes = obj.optInt("prepMinutes", 20).coerceIn(5, 180),
+                        prepMinutes = obj.optInt("prepMinutes", 15).coerceIn(2, 180),
                         matchTags = ingredients,
                         ingredients = ingList,
                         steps = stepList,
-                        tips = obj.optString("tips", "Ajusta sal y especias al gusto."),
-                        kcal = obj.optDouble("kcal", 400.0).roundToInt().coerceAtLeast(0),
+                        tips = obj.optString("tips", "Ajusta al gusto."),
+                        kcal = obj.optDouble("kcal", 350.0).roundToInt().coerceAtLeast(0),
                         protein = obj.optDouble("p", 25.0).roundToInt().coerceAtLeast(0),
-                        carbs = obj.optDouble("c", 40.0).roundToInt().coerceAtLeast(0),
-                        fat = obj.optDouble("f", 12.0).roundToInt().coerceAtLeast(0),
+                        carbs = obj.optDouble("c", 35.0).roundToInt().coerceAtLeast(0),
+                        fat = obj.optDouble("f", 10.0).roundToInt().coerceAtLeast(0),
+                        section = section,
                         isAiGenerated = true
                     )
                 )

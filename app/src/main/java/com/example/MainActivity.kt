@@ -285,6 +285,7 @@ fun MisMacrosApp() {
 
                         PAGE_RECIPES -> RecipesScreen(
                             uiState = uiState,
+                            onSelectSection = viewModel::setRecipeSection,
                             onToggleIngredient = viewModel::toggleIngredient,
                             onAddCustomIngredient = viewModel::addCustomIngredient,
                             onClearIngredients = viewModel::clearIngredients,

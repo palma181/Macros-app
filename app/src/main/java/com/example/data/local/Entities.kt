@@ -35,5 +35,6 @@ data class SavedRecipeEntity(
     val protein: Int,
     val carbs: Int,
     val fat: Int,
+    val section: String = "platillos",
     val createdAt: Long = System.currentTimeMillis()
 )

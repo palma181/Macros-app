@@ -23,6 +23,7 @@ import com.example.data.local.MealEntity
 import com.example.data.model.MacroGoals
 import com.example.data.model.RecipeCatalog
 import com.example.data.model.RecipeDifficulty
+import com.example.data.model.RecipeSection
 import com.example.data.preferences.AppPreferencesRepository
 import com.example.data.repository.MacroRepository
 import com.example.util.DateUtils
@@ -68,6 +69,27 @@ class MisMacrosAppTest {
             difficultyFilter = RecipeDifficulty.INTERMEDIATE
         )
         assertTrue(pastaMatches.any { it.recipe.title.contains("Fettuccini", ignoreCase = true) })
+    }
+
+    @Test
+    fun recipeCatalog_matchesSnacksFruitsAndSupplementsAcrossAllLevels() {
+        val snackMatches = RecipeCatalog.findMatchingRecipes(
+            selectedIngredients = listOf("Plátano", "Proteína Whey", "Creatina"),
+            difficultyFilter = null,
+            section = RecipeSection.SNACKS_DRINKS
+        )
+        assertTrue(snackMatches.isNotEmpty())
+        assertEquals(RecipeSection.SNACKS_DRINKS, snackMatches.first().recipe.section)
+        assertTrue(snackMatches.any { it.recipe.difficulty == RecipeDifficulty.BASIC })
+        assertTrue(snackMatches.any { it.recipe.difficulty == RecipeDifficulty.INTERMEDIATE })
+        assertTrue(snackMatches.any { it.recipe.difficulty == RecipeDifficulty.ADVANCED })
+
+        val suppMatches = RecipeCatalog.findMatchingRecipes(
+            selectedIngredients = listOf("Caseína", "Colágeno", "BCAA / EAA", "Electrolitos"),
+            difficultyFilter = null,
+            section = RecipeSection.SNACKS_DRINKS
+        )
+        assertTrue(suppMatches.size >= 4)
     }
 
     @Test
@@ -170,6 +192,25 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("recipes_lazy_column")
             .performScrollToNode(hasTestTag("recipe_card_basic_pollo_arroz"))
         composeRule.onNodeWithTag("recipe_card_basic_pollo_arroz").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Manual de preparación").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("log_recipe_as_meal_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // 3b. Switch to Snacks y Bebidas apartado inside Cocina, pick fruit + supplement, open manual and log
+        composeRule.onNodeWithTag("recipes_lazy_column")
+            .performScrollToNode(hasTestTag("section_snacks_bebidas"))
+        composeRule.onNodeWithTag("section_snacks_bebidas").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("ing_chip_platano").performClick()
+        composeRule.onNodeWithTag("ing_chip_proteina whey").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("recipes_lazy_column")
+            .performScrollToNode(hasTestTag("recipe_card_snack_basic_batido_whey_platano_creatina"))
+        composeRule.onNodeWithTag("recipe_card_snack_basic_batido_whey_platano_creatina").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Manual de preparación").performScrollTo().assertIsDisplayed()

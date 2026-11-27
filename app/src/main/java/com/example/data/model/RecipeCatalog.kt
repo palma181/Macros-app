@@ -23,6 +23,45 @@ object RecipeCatalog {
         )
     )
 
+    val snackIngredientGroups: List<IngredientGroup> = listOf(
+        IngredientGroup(
+            title = "Frutas",
+            items = listOf("Plátano", "Fresa", "Mora azul", "Manzana", "Mango", "Piña", "Papaya", "Aguacate", "Limón", "Dátil")
+        ),
+        IngredientGroup(
+            title = "Suplementos",
+            items = listOf(
+                "Proteína Whey",
+                "Caseína",
+                "Proteína Vegetal",
+                "Creatina",
+                "BCAA / EAA",
+                "Pre-entreno",
+                "Colágeno",
+                "Glutamina",
+                "Beta-Alanina",
+                "Cafeína",
+                "L-Carnitina",
+                "Electrolitos",
+                "Omega 3"
+            )
+        ),
+        IngredientGroup(
+            title = "Bases y líquidos",
+            items = listOf("Leche", "Bebida de almendra", "Yogurt griego", "Agua de coco", "Café espresso", "Matcha", "Hielo")
+        ),
+        IngredientGroup(
+            title = "Extras para snacks y batidos",
+            items = listOf("Avena", "Crema de cacahuate", "Chía", "Linaza", "Cacao", "Tortitas de arroz", "Miel", "Canela", "Nueces")
+        )
+    )
+
+    fun ingredientGroupsFor(section: RecipeSection): List<IngredientGroup> =
+        when (section) {
+            RecipeSection.MEALS -> ingredientGroups
+            RecipeSection.SNACKS_DRINKS -> snackIngredientGroups
+        }
+
     val recipes: List<RecipeOption> = listOf(
         // === BÁSICO ===
         RecipeOption(
@@ -569,6 +608,385 @@ object RecipeCatalog {
         )
     )
 
+    val snackDrinkRecipes: List<RecipeOption> = listOf(
+        // === BÁSICO (SNACKS Y BEBIDAS) ===
+        RecipeOption(
+            id = "snack_basic_batido_whey_platano_creatina",
+            title = "Batido clásico post-entreno de proteína whey, plátano y creatina",
+            difficulty = RecipeDifficulty.BASIC,
+            prepMinutes = 4,
+            matchTags = listOf("proteina whey", "whey", "platano", "creatina", "leche", "bebida de almendra", "hielo"),
+            ingredients = listOf(
+                "1 scoop (30 g) de proteína whey (vainilla o chocolate)",
+                "5 g de creatina monohidratada",
+                "1 plátano maduro (aprox. 110 g)",
+                "300 ml de leche descremada o bebida de almendra + 4 cubos de hielo"
+            ),
+            steps = listOf(
+                "Vierte primero el líquido frío en el vaso de la licuadora o shaker para evitar que el polvo se pegue al fondo.",
+                "Agrega el plátano troceado, el scoop de proteína whey y los 5 g de creatina.",
+                "Añade el hielo y licúa 30 segundos hasta obtener un batido espumoso y homogéneo.",
+                "Tómalo enseguida para aprovechar el vaciado rápido de la creatina disuelta."
+            ),
+            tips = "Si usas shaker sin licuadora, machaca o come el plátano aparte y agita la whey con la creatina en agua o leche bien fría.",
+            kcal = 315,
+            protein = 31,
+            carbs = 38,
+            fat = 4,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_basic_hidratante_electrolitos_bcaa",
+            title = "Bebida intra-entreno refrescante con electrolitos, BCAA/EAA y limón",
+            difficulty = RecipeDifficulty.BASIC,
+            prepMinutes = 3,
+            matchTags = listOf("electrolitos", "bcaa / eaa", "bcaa", "eaa", "limon", "hielo", "agua de coco"),
+            ingredients = listOf(
+                "1 porción de BCAA o EAA en polvo (5–10 g)",
+                "1 sobre o scoop de electrolitos (sodio, potasio y magnesio)",
+                "Jugo de 1 limón fresco",
+                "500 ml de agua fría o agua de coco diluida + abundante hielo"
+            ),
+            steps = listOf(
+                "Llena un termo o shaker de al menos 600 ml con agua bien fría o mezcla mitad agua y mitad agua de coco.",
+                "Disuelve los electrolitos y los BCAA/EAA agitando vigorosamente durante 20 segundos.",
+                "Exprime el jugo de limón fresco y añade hielo abundante antes de entrenar."
+            ),
+            tips = "Si el polvo hace espuma al agitar, déjalo reposar 1 minuto antes de añadir el hielo.",
+            kcal = 35,
+            protein = 6,
+            carbs = 3,
+            fat = 0,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_basic_manzana_cacahuate_canela",
+            title = "Snack crujiente de manzana en gajos con crema de cacahuate y canela",
+            difficulty = RecipeDifficulty.BASIC,
+            prepMinutes = 4,
+            matchTags = listOf("manzana", "crema de cacahuate", "canela"),
+            ingredients = listOf(
+                "1 manzana mediana (roja o verde) en gajos",
+                "1.5 cdas (24 g) de crema de cacahuate natural sin azúcar añadida",
+                "1/4 cdta de canela en polvo"
+            ),
+            steps = listOf(
+                "Lava y corta la manzana en 8–10 gajos delgados retirando el corazón.",
+                "Coloca los gajos en un plato y unta o rocía por encima la crema de cacahuate.",
+                "Espolvorea canela en polvo al gusto."
+            ),
+            tips = "Puedes calentar la crema de cacahuate 10 segundos para volverla más fluida y repartirla mejor.",
+            kcal = 240,
+            protein = 7,
+            carbs = 27,
+            fat = 13,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_basic_proffee_whey_colageno",
+            title = "Café helado proteico (Proffee) con whey, colágeno y leche",
+            difficulty = RecipeDifficulty.BASIC,
+            prepMinutes = 5,
+            matchTags = listOf("cafe espresso", "proteina whey", "whey", "colageno", "cafeina", "leche", "bebida de almendra", "hielo"),
+            ingredients = listOf(
+                "1 shot doble de café espresso frío o café soluble cargado (60 ml)",
+                "1 scoop (30 g) de proteína whey sabor vainilla o caramelo",
+                "10 g (1 scoop) de colágeno hidrolizado sin sabor",
+                "220 ml de leche o bebida de almendra + hielo al gusto"
+            ),
+            steps = listOf(
+                "Mezcla en un shaker la leche fría con la proteína whey y el colágeno hasta que no queden grumos (el colágeno se disuelve mejor si primero agitas bien).",
+                "Llena un vaso grande con hielo y vierte la mezcla proteica.",
+                "Agrega lentamente el shot de café espresso frío por encima y mezcla suave."
+            ),
+            tips = "Nunca agregues whey directo al café hirviendo porque puede coagularse en grumos; enfría primero el café o mézclala en la leche fría.",
+            kcal = 205,
+            protein = 35,
+            carbs = 6,
+            fat = 4,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_basic_preentreno_carnitina_beta",
+            title = "Shot pre-entreno cítrico con L-carnitina, beta-alanina y cafeína",
+            difficulty = RecipeDifficulty.BASIC,
+            prepMinutes = 3,
+            matchTags = listOf("pre-entreno", "l-carnitina", "beta-alanina", "cafeina", "limon", "hielo"),
+            ingredients = listOf(
+                "1 scoop de pre-entreno (o 150–200 mg de cafeína + 3 g de beta-alanina)",
+                "1.5–2 g de L-carnitina líquida o en polvo",
+                "Jugo de 1/2 limón",
+                "250 ml de agua bien fría y hielo"
+            ),
+            steps = listOf(
+                "Vierte el agua muy fría en tu shaker.",
+                "Añade el pre-entreno (o mezcla cafeína + beta-alanina), la L-carnitina y el jugo de limón.",
+                "Agita 15 segundos y consúmelo 20–30 minutos antes de iniciar tu sesión."
+            ),
+            tips = "El hormigueo ligero de la beta-alanina es normal y temporal; evita tomar cafeína en las últimas 6 horas antes de dormir.",
+            kcal = 20,
+            protein = 0,
+            carbs = 4,
+            fat = 0,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+
+        // === INTERMEDIO (SNACKS Y BEBIDAS) ===
+        RecipeOption(
+            id = "snack_inter_batido_tropical_colageno",
+            title = "Batido verde tropical de mango, piña, colágeno y agua de coco",
+            difficulty = RecipeDifficulty.INTERMEDIATE,
+            prepMinutes = 7,
+            matchTags = listOf("mango", "pina", "colageno", "agua de coco", "chia", "limon", "hielo", "espinaca"),
+            ingredients = listOf(
+                "100 g de mango congelado + 80 g de piña",
+                "10 g de colágeno hidrolizado",
+                "1 cda (10 g) de semillas de chía",
+                "250 ml de agua de coco fría, jugo de 1/2 limón y 1 puñito opcional de espinaca"
+            ),
+            steps = listOf(
+                "Hidrata la chía en 3 cdas del agua de coco durante 3 minutos mientras cortas la fruta.",
+                "Coloca en la licuadora el mango, piña, resto del agua de coco, limón y colágeno.",
+                "Licúa a máxima potencia 45 segundos hasta lograr textura aterciopelada.",
+                "Sirve en vaso alto e incorpora la chía hidratada removiendo con cuchara."
+            ),
+            tips = "Congelar el mango y la piña en cubos elimina la necesidad de mucho hielo y deja el batido mucho más cremoso.",
+            kcal = 245,
+            protein = 13,
+            carbs = 42,
+            fat = 4,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_inter_smoothie_bowl_frutos_whey",
+            title = "Smoothie bowl de fresa, mora azul, yogurt griego, whey y avena",
+            difficulty = RecipeDifficulty.INTERMEDIATE,
+            prepMinutes = 8,
+            matchTags = listOf("fresa", "mora azul", "yogurt griego", "proteina whey", "whey", "avena", "chia"),
+            ingredients = listOf(
+                "120 g de fresa congelada + 60 g de mora azul",
+                "120 g de yogurt griego natural",
+                "1 scoop (30 g) de proteína whey de vainilla",
+                "30 g de avena en hojuelas + 1 cdta de semillas de chía"
+            ),
+            steps = listOf(
+                "Licúa las fresas congeladas, la mitad de las moras azules, el yogurt griego y la proteína whey usando muy poca agua o leche (solo 40 ml) para mantener consistencia espesa de helado.",
+                "Vierte la mezcla espesa en un tazón frío.",
+                "Decora por encima con las moras restantes, la avena crujiente y las semillas de chía."
+            ),
+            tips = "Usa fruta congelada y el mínimo líquido posible: ese es el secreto para poder comerlo con cuchara sin que quede aguado.",
+            kcal = 405,
+            protein = 37,
+            carbs = 48,
+            fat = 7,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_inter_pudin_caseina_cacao",
+            title = "Mousse nocturno de caseína, cacao, plátano y chía",
+            difficulty = RecipeDifficulty.INTERMEDIATE,
+            prepMinutes = 8,
+            matchTags = listOf("caseina", "cacao", "platano", "chia", "leche", "bebida de almendra"),
+            ingredients = listOf(
+                "1 scoop (32 g) de proteína caseína micelar",
+                "1 cda de cacao puro sin azúcar",
+                "1/2 plátano en rodajas + 1 cda de chía",
+                "200 ml de leche o bebida de almendra fría"
+            ),
+            steps = listOf(
+                "En un tazón o frasco mezcla la caseína y el cacao en polvo en seco.",
+                "Añade poco a poco la leche fría batiendo con tenedor o batidor de mano hasta lograr consistencia de mousse espesa (la caseína absorbe mucho más líquido que la whey).",
+                "Incorpora la chía y refrigera 15–20 minutos para que espese aún más.",
+                "Sirve decorado con las rodajas de plátano."
+            ),
+            tips = "Ideal antes de dormir: la caseína libera aminoácidos de forma sostenida durante varias horas.",
+            kcal = 310,
+            protein = 31,
+            carbs = 29,
+            fat = 7,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_inter_batido_vegano_papaya_glutamina",
+            title = "Batido digestivo de proteína vegetal, papaya, linaza, avena y glutamina",
+            difficulty = RecipeDifficulty.INTERMEDIATE,
+            prepMinutes = 6,
+            matchTags = listOf("proteina vegetal", "papaya", "linaza", "avena", "glutamina", "bebida de almendra", "canela"),
+            ingredients = listOf(
+                "1 scoop (32 g) de proteína vegetal (chícharo/arroz)",
+                "160 g de papaya madura en cubos",
+                "5 g de L-glutamina + 1 cda de linaza molida",
+                "25 g de avena + 280 ml de bebida de almendra + pizca de canela"
+            ),
+            steps = listOf(
+                "Coloca la bebida de almendra, la papaya y la avena en la licuadora y procesa 25 segundos para triturar la avena.",
+                "Agrega la proteína vegetal, la glutamina, la linaza molida y la canela.",
+                "Licúa 20 segundos adicionales hasta lograr una bebida suave y uniforme.",
+                "Sirve al momento para evitar que la linaza espese demasiado el vaso."
+            ),
+            tips = "La papaína natural de la papaya junto con la glutamina y la linaza hacen este batido muy ligero para la digestión.",
+            kcal = 345,
+            protein = 28,
+            carbs = 41,
+            fat = 8,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_inter_tortitas_arroz_preentreno",
+            title = "Snack pre-entreno de tortitas de arroz, crema de cacahuate, plátano y miel",
+            difficulty = RecipeDifficulty.INTERMEDIATE,
+            prepMinutes = 5,
+            matchTags = listOf("tortitas de arroz", "crema de cacahuate", "platano", "miel", "canela"),
+            ingredients = listOf(
+                "3 tortitas de arroz inflado (aprox. 27 g)",
+                "1 cda (16 g) de crema de cacahuate",
+                "1 plátano pequeño en rodajas",
+                "1 cdta de miel de abeja + canela"
+            ),
+            steps = listOf(
+                "Unta una capa uniforme de crema de cacahuate sobre las tortitas de arroz.",
+                "Coloca encima las rodajas finas de plátano cubriendo toda la superficie.",
+                "Termina con un hilo de miel y canela; consume 30–45 minutos antes de entrenar."
+            ),
+            tips = "Combina carbohidratos de rápida disponibilidad (tortitas y miel) con energía sostenida del plátano.",
+            kcal = 300,
+            protein = 7,
+            carbs = 49,
+            fat = 9,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+
+        // === AVANZADO (SNACKS Y BEBIDAS) ===
+        RecipeOption(
+            id = "snack_adv_frappe_matcha_whey_creatina",
+            title = "Frappé energético de matcha, whey, creatina, dátiles y almendra",
+            difficulty = RecipeDifficulty.ADVANCED,
+            prepMinutes = 9,
+            matchTags = listOf("matcha", "proteina whey", "whey", "creatina", "datil", "bebida de almendra", "nueces", "hielo"),
+            ingredients = listOf(
+                "1.5 cdtas (3 g) de té matcha ceremonial",
+                "1 scoop (30 g) de proteína whey de vainilla + 5 g de creatina",
+                "2 dátiles sin hueso (remojados 3 min en agua tibia)",
+                "250 ml de bebida de almendra + 1 taza de hielo + 10 g de nueces/almendras"
+            ),
+            steps = listOf(
+                "Disuelve primero el matcha en 40 ml de agua tibia (no hirviendo, ~75 °C) batiendo en zigzag hasta que no tenga grumos.",
+                "Licúa la bebida de almendra con los dátiles remojados y las nueces/almendras durante 30 segundos para crear una leche dulce natural.",
+                "Agrega la whey, la creatina, el matcha disuelto y el hielo.",
+                "Pulsa en modo frappé 20–25 segundos hasta lograr textura granizada cremosa."
+            ),
+            tips = "Disolver el matcha en agua tibia aparte evita puntitos amargos en el frappé frío y potencia su color verde vibrante.",
+            kcal = 355,
+            protein = 29,
+            carbs = 36,
+            fat = 11,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_adv_smoothie_antioxidante_triple_capa",
+            title = "Smoothie triple capa de frutos rojos, colágeno, glutamina y yogurt",
+            difficulty = RecipeDifficulty.ADVANCED,
+            prepMinutes = 12,
+            matchTags = listOf("fresa", "mora azul", "yogurt griego", "colageno", "glutamina", "linaza", "miel", "chia"),
+            ingredients = listOf(
+                "100 g de fresa + 70 g de mora azul",
+                "150 g de yogurt griego natural",
+                "10 g de colágeno + 5 g de glutamina + 1 cdta de linaza",
+                "1 cdta de miel y 1 cdta de chía"
+            ),
+            steps = listOf(
+                "Capa 1 (base): Licúa las moras azules con 40 g de yogurt, la linaza y la glutamina; vierte en el fondo de un vaso alto.",
+                "Capa 2 (centro): Mezcla 70 g de yogurt griego con el colágeno y la miel; coloca cuidadosamente sobre la primera capa usando el dorso de una cuchara.",
+                "Capa 3 (top): Licúa las fresas con el yogurt restante y un par de hielos; termina el vaso y decora con chía."
+            ),
+            tips = "Enfriar el vaso 5 minutos antes ayuda a mantener las tres capas bien definidas mientras sirves.",
+            kcal = 315,
+            protein = 30,
+            carbs = 34,
+            fat = 6,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_adv_bolitas_energeticas_whey_datil",
+            title = "Bites energéticos sin horno de avena, dátil, whey, cacao y nueces",
+            difficulty = RecipeDifficulty.ADVANCED,
+            prepMinutes = 15,
+            matchTags = listOf("avena", "datil", "proteina whey", "whey", "cacao", "crema de cacahuate", "nueces", "chia"),
+            ingredients = listOf(
+                "45 g de avena en hojuelas",
+                "3 dátiles sin hueso (aprox. 40 g)",
+                "1 scoop (30 g) de proteína whey de chocolate + 1 cda de cacao",
+                "1 cda (16 g) de crema de cacahuate + 15 g de nueces picadas + 1 cdta de chía"
+            ),
+            steps = listOf(
+                "Remoja los dátiles 5 minutos en agua caliente y escúrrelos bien.",
+                "Procesa en procesador o licuadora potente la avena, dátiles y cacao hasta formar una masa pegajosa.",
+                "Transfiere a un tazón e incorpora la whey, crema de cacahuate, nueces picadas y chía; si queda muy seca añade 1–2 cdtas de agua.",
+                "Forma 4–5 bolitas firmes con las manos húmedas y refrigera 15 minutos antes de servir (la porción registrada equivale a todo el lote o 4–5 bites)."
+            ),
+            tips = "Guarda las bolitas en recipiente hermético en el refri hasta por 6 días como snack portátil de alta densidad nutricional.",
+            kcal = 465,
+            protein = 32,
+            carbs = 49,
+            fat = 16,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_adv_batido_nocturno_caseina_omega_aguacate",
+            title = "Batido recuperador nocturno de caseína, aguacate, fresa, cacao y omega 3",
+            difficulty = RecipeDifficulty.ADVANCED,
+            prepMinutes = 8,
+            matchTags = listOf("caseina", "aguacate", "fresa", "cacao", "omega 3", "leche", "bebida de almendra", "hielo"),
+            ingredients = listOf(
+                "1 scoop (32 g) de caseína de chocolate o vainilla",
+                "50 g de aguacate maduro (aporta cremosidad sedosa)",
+                "80 g de fresas congeladas + 1 cda de cacao puro",
+                "1 porción de omega 3 líquido (o acompañar con tus cápsulas de omega 3) + 250 ml de leche o bebida de almendra"
+            ),
+            steps = listOf(
+                "Licúa la leche o bebida de almendra con el aguacate, las fresas congeladas y el cacao durante 35 segundos hasta obtener textura tipo malteada.",
+                "Añade la caseína (y el omega 3 líquido si usas formato en aceite saborizado; si usas cápsulas, tómalas junto al batido) y pulsa 15 segundos más sin sobre-espumar.",
+                "Sirve frío; el aguacate da cuerpo de helado sin azúcares añadidos."
+            ),
+            tips = "Las grasas monoinsaturadas del aguacate y el omega 3 mejoran la absorción de compuestos liposolubles y complementan la digestión lenta de la caseína.",
+            kcal = 385,
+            protein = 31,
+            carbs = 21,
+            fat = 19,
+            section = RecipeSection.SNACKS_DRINKS
+        ),
+        RecipeOption(
+            id = "snack_adv_smoothie_verde_creatina_bcaa_pina",
+            title = "Batido post-entreno funcional de piña, mango, whey, creatina y BCAA",
+            difficulty = RecipeDifficulty.ADVANCED,
+            prepMinutes = 7,
+            matchTags = listOf("pina", "mango", "proteina whey", "whey", "creatina", "bcaa / eaa", "agua de coco", "limon", "hielo"),
+            ingredients = listOf(
+                "90 g de piña + 70 g de mango",
+                "1 scoop (30 g) de proteína whey aislada (vainilla o neutro)",
+                "5 g de creatina + 5 g de BCAA/EAA",
+                "250 ml de agua de coco + jugo de 1/2 limón + hielo"
+            ),
+            steps = listOf(
+                "Licúa la piña, el mango y el agua de coco con hielo hasta obtener un puré frío y brillante.",
+                "Agrega la proteína whey, la creatina, los BCAA/EAA y el jugo de limón.",
+                "Procesa 15 segundos a velocidad media para evitar exceso de espuma y sirve de inmediato."
+            ),
+            tips = "Combina reposición de glucógeno (piña, mango, agua de coco), electrolitos naturales y soporte muscular completo en un solo vaso.",
+            kcal = 305,
+            protein = 31,
+            carbs = 41,
+            fat = 2,
+            section = RecipeSection.SNACKS_DRINKS
+        )
+    )
+
+    fun recipesFor(section: RecipeSection): List<RecipeOption> =
+        when (section) {
+            RecipeSection.MEALS -> recipes
+            RecipeSection.SNACKS_DRINKS -> snackDrinkRecipes
+        }
+
     fun normalize(text: String): String {
         val decomposed = Normalizer.normalize(text.lowercase().trim(), Normalizer.Form.NFD)
         return decomposed.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
@@ -576,14 +994,15 @@ object RecipeCatalog {
 
     fun findMatchingRecipes(
         selectedIngredients: List<String>,
-        difficultyFilter: RecipeDifficulty?
+        difficultyFilter: RecipeDifficulty?,
+        section: RecipeSection = RecipeSection.MEALS
     ): List<RecipeMatchResult> {
         val normalizedSelected = selectedIngredients
             .map { normalize(it) }
             .filter { it.isNotBlank() }
             .distinct()
 
-        val candidates = recipes.filter { recipe ->
+        val candidates = recipesFor(section).filter { recipe ->
             difficultyFilter == null || recipe.difficulty == difficultyFilter
         }
 
@@ -594,11 +1013,16 @@ object RecipeCatalog {
         val scored = candidates.mapNotNull { recipe ->
             val matched = selectedIngredients.filter { userIng ->
                 val normIng = normalize(userIng)
+                val tokens = normIng.split("/", " ").map { it.trim() }.filter { it.length >= 3 }
                 recipe.matchTags.any { tag ->
-                    tag.contains(normIng) || normIng.contains(tag)
+                    tag.contains(normIng) || normIng.contains(tag) ||
+                        tokens.any { tok -> tag.contains(tok) }
                 } || recipe.ingredients.any { line ->
-                    normalize(line).contains(normIng)
-                } || normalize(recipe.title).contains(normIng)
+                    val normLine = normalize(line)
+                    normLine.contains(normIng) || tokens.any { tok -> normLine.contains(tok) }
+                } || normalize(recipe.title).let { normTitle ->
+                    normTitle.contains(normIng) || tokens.any { tok -> normTitle.contains(tok) }
+                }
             }
             if (matched.isNotEmpty()) {
                 RecipeMatchResult(recipe = recipe, matchedIngredients = matched.distinct())

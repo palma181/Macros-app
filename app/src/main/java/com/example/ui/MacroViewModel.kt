@@ -17,6 +17,7 @@ import com.example.data.model.RecipeCatalog
 import com.example.data.model.RecipeDifficulty
 import com.example.data.model.RecipeMatchResult
 import com.example.data.model.RecipeOption
+import com.example.data.model.RecipeSection
 import com.example.data.preferences.AppPreferencesRepository
 import com.example.data.repository.MacroRepository
 import com.example.util.DateUtils
@@ -70,15 +71,22 @@ data class PeriodSummary(
 )
 
 data class RecipeStudioState(
-    val selectedIngredients: List<String> = emptyList(),
+    val activeSection: RecipeSection = RecipeSection.MEALS,
+    val selectedIngredientsBySection: Map<RecipeSection, List<String>> = emptyMap(),
     val difficultyFilter: RecipeDifficulty? = null,
-    val catalogMatches: List<RecipeMatchResult> = RecipeCatalog.findMatchingRecipes(emptyList(), null),
-    val aiRecipes: List<RecipeOption> = emptyList(),
+    val catalogMatches: List<RecipeMatchResult> = RecipeCatalog.findMatchingRecipes(emptyList(), null, RecipeSection.MEALS),
+    val aiRecipesBySection: Map<RecipeSection, List<RecipeOption>> = emptyMap(),
     val savedRecipes: List<RecipeOption> = emptyList(),
     val activeRecipeManual: RecipeOption? = null,
     val isGeneratingAi: Boolean = false,
     val aiError: String? = null
-)
+) {
+    val selectedIngredients: List<String>
+        get() = selectedIngredientsBySection[activeSection].orEmpty()
+
+    val aiRecipes: List<RecipeOption>
+        get() = aiRecipesBySection[activeSection].orEmpty()
+}
 
 data class MacroUiState(
     val selectedDate: String = DateUtils.todayIso(),
@@ -435,17 +443,32 @@ class MacroViewModel(
     }
 
     // === Recipe Studio ===
+    fun setRecipeSection(section: RecipeSection) {
+        recipeStudioFlow.update { current ->
+            if (current.activeSection == section) return@update current
+            val selected = current.selectedIngredientsBySection[section].orEmpty()
+            current.copy(
+                activeSection = section,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(selected, current.difficultyFilter, section),
+                aiError = null
+            )
+        }
+    }
+
     fun toggleIngredient(ingredient: String) {
         recipeStudioFlow.update { current ->
-            val exists = current.selectedIngredients.any { it.equals(ingredient, ignoreCase = true) }
+            val section = current.activeSection
+            val existingList = current.selectedIngredientsBySection[section].orEmpty()
+            val exists = existingList.any { it.equals(ingredient, ignoreCase = true) }
             val updated = if (exists) {
-                current.selectedIngredients.filterNot { it.equals(ingredient, ignoreCase = true) }
+                existingList.filterNot { it.equals(ingredient, ignoreCase = true) }
             } else {
-                current.selectedIngredients + ingredient
+                existingList + ingredient
             }
+            val updatedMap = current.selectedIngredientsBySection + (section to updated)
             current.copy(
-                selectedIngredients = updated,
-                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter),
+                selectedIngredientsBySection = updatedMap,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter, section),
                 aiError = null
             )
         }
@@ -455,11 +478,14 @@ class MacroViewModel(
         val clean = raw.trim()
         if (clean.isBlank()) return
         recipeStudioFlow.update { current ->
-            val exists = current.selectedIngredients.any { it.equals(clean, ignoreCase = true) }
-            val updated = if (exists) current.selectedIngredients else current.selectedIngredients + clean
+            val section = current.activeSection
+            val existingList = current.selectedIngredientsBySection[section].orEmpty()
+            val exists = existingList.any { it.equals(clean, ignoreCase = true) }
+            val updated = if (exists) existingList else existingList + clean
+            val updatedMap = current.selectedIngredientsBySection + (section to updated)
             current.copy(
-                selectedIngredients = updated,
-                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter),
+                selectedIngredientsBySection = updatedMap,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(updated, current.difficultyFilter, section),
                 aiError = null
             )
         }
@@ -467,10 +493,11 @@ class MacroViewModel(
 
     fun clearIngredients() {
         recipeStudioFlow.update { current ->
+            val section = current.activeSection
             current.copy(
-                selectedIngredients = emptyList(),
-                catalogMatches = RecipeCatalog.findMatchingRecipes(emptyList(), current.difficultyFilter),
-                aiRecipes = emptyList(),
+                selectedIngredientsBySection = current.selectedIngredientsBySection - section,
+                catalogMatches = RecipeCatalog.findMatchingRecipes(emptyList(), current.difficultyFilter, section),
+                aiRecipesBySection = current.aiRecipesBySection - section,
                 aiError = null
             )
         }
@@ -478,35 +505,43 @@ class MacroViewModel(
 
     fun setDifficultyFilter(difficulty: RecipeDifficulty?) {
         recipeStudioFlow.update { current ->
+            val section = current.activeSection
+            val selected = current.selectedIngredientsBySection[section].orEmpty()
             current.copy(
                 difficultyFilter = difficulty,
-                catalogMatches = RecipeCatalog.findMatchingRecipes(current.selectedIngredients, difficulty)
+                catalogMatches = RecipeCatalog.findMatchingRecipes(selected, difficulty, section)
             )
         }
     }
 
     fun generateAiRecipes() {
-        val ingredients = recipeStudioFlow.value.selectedIngredients
+        val currentState = recipeStudioFlow.value
+        val section = currentState.activeSection
+        val ingredients = currentState.selectedIngredients
         if (ingredients.isEmpty()) {
             recipeStudioFlow.update {
-                it.copy(aiError = "Elige o escribe al menos un ingrediente para generar recetas con IA.")
+                it.copy(aiError = "Elige o escribe al menos un ingrediente para generar opciones con IA.")
             }
             return
         }
-        val difficulty = recipeStudioFlow.value.difficultyFilter
+        val difficulty = currentState.difficultyFilter
         viewModelScope.launch {
             recipeStudioFlow.update { it.copy(isGeneratingAi = true, aiError = null) }
-            repository.generateAiRecipes(ingredients, difficulty).fold(
+            repository.generateAiRecipes(ingredients, difficulty, section).fold(
                 onSuccess = { list ->
-                    recipeStudioFlow.update {
-                        it.copy(isGeneratingAi = false, aiRecipes = list, aiError = null)
+                    recipeStudioFlow.update { state ->
+                        state.copy(
+                            isGeneratingAi = false,
+                            aiRecipesBySection = state.aiRecipesBySection + (section to list),
+                            aiError = null
+                        )
                     }
                 },
                 onFailure = { err ->
                     recipeStudioFlow.update {
                         it.copy(
                             isGeneratingAi = false,
-                            aiError = err.message ?: "No se pudieron generar recetas con IA"
+                            aiError = err.message ?: "No se pudieron generar opciones con IA"
                         )
                     }
                 }
