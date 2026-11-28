@@ -320,7 +320,7 @@ class MisMacrosAppTest {
         composeRule.onNodeWithTag("ai_preset_cerebras").assertIsDisplayed()
         composeRule.onNodeWithTag("ai_preset_sambanova").assertIsDisplayed()
         composeRule.onNodeWithTag("ai_preset_huggingface").assertIsDisplayed()
-        composeRule.onNodeWithTag("ai_preset_github").performClick()
+        composeRule.onNodeWithTag("ai_preset_nvidia").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ai_get_key_button").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("ai_detect_models_button").performScrollTo().assertIsDisplayed()

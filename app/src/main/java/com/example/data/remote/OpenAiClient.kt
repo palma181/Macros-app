@@ -339,47 +339,89 @@ class OpenAiClient {
                     return AttemptOutcome.OtherError(IOException("$friendlyPrefix: $detail"))
                 }
 
-                val json = JSONObject(rawBody)
-                val choices = json.optJSONArray("choices")
-                    ?: return AttemptOutcome.OtherError(IOException("Respuesta inesperada del proveedor (sin choices)."))
-                if (choices.length() == 0) {
-                    return AttemptOutcome.OtherError(IOException("El proveedor devolvió una respuesta vacía."))
-                }
-                val message = choices.getJSONObject(0).getJSONObject("message")
-                val text = extractMessageText(message)
-                    ?: return AttemptOutcome.OtherError(IOException("No se pudo leer el contenido de la respuesta de la IA."))
-                AttemptOutcome.Success(text)
+                parseCompletionResponse(rawBody)
+                    ?.let { AttemptOutcome.Success(it) }
+                    ?: AttemptOutcome.OtherError(
+                        IOException(buildNonJsonErrorMessage(rawBody, endpoint))
+                    )
             }
         } catch (t: Throwable) {
             AttemptOutcome.OtherError(t)
         }
     }
 
-    private fun fetchModelsBlocking(baseUrl: String, apiKey: String): List<String> {
-        val cleanBase = baseUrl.removeSuffix("/chat/completions").trimEnd('/')
-        val urlsToTry = buildList {
-            add("$cleanBase/models")
-            if (cleanBase.contains("models.github.ai", ignoreCase = true)) {
-                add("https://models.github.ai/catalog/models")
+    private fun parseCompletionResponse(rawBody: String): String? {
+        val trimmed = rawBody.trim()
+        if (trimmed.isBlank()) return null
+
+        val jsonObj = runCatching { JSONObject(trimmed) }.getOrNull()
+        if (jsonObj != null) {
+            val choices = jsonObj.optJSONArray("choices")
+            if (choices != null && choices.length() > 0) {
+                val msg = choices.optJSONObject(0)?.optJSONObject("message")
+                if (msg != null) {
+                    val extracted = extractMessageText(msg)
+                    if (!extracted.isNullOrBlank()) return extracted
+                }
+                val text = choices.optJSONObject(0)?.optString("text")?.takeIf { it.isNotBlank() }
+                if (text != null) return text
             }
+            val direct = jsonObj.optString("response").takeIf { it.isNotBlank() }
+                ?: jsonObj.optString("content").takeIf { it.isNotBlank() }
+            if (direct != null) return direct
         }
 
-        for (modelsUrl in urlsToTry) {
-            val requestBuilder = Request.Builder()
-                .url(modelsUrl)
-                .get()
-            if (apiKey.isNotBlank()) {
-                requestBuilder.addHeader("Authorization", "Bearer $apiKey")
-            }
-            val parsed = runCatching {
-                client.newCall(requestBuilder.build()).execute().use { response ->
-                    if (!response.isSuccessful) return@use emptyList()
-                    parseModelsList(response.body?.string().orEmpty(), cleanBase)
+        // Handle SSE streaming payloads (data: {"choices":[{"delta":{"content":"..."}}]})
+        if (trimmed.startsWith("data:", ignoreCase = true)) {
+            val sb = StringBuilder()
+            trimmed.lineSequence().forEach { line ->
+                val data = line.trim()
+                if (data.startsWith("data:", ignoreCase = true)) {
+                    val payload = data.removePrefix("data:").trim()
+                    if (payload.isNotEmpty() && payload != "[DONE]") {
+                        val chunk = runCatching { JSONObject(payload) }.getOrNull()
+                        val choice0 = chunk?.optJSONArray("choices")?.optJSONObject(0)
+                        val deltaText = choice0?.optJSONObject("delta")?.optString("content")
+                            ?: choice0?.optJSONObject("message")?.optString("content")
+                        if (!deltaText.isNullOrEmpty()) sb.append(deltaText)
+                    }
                 }
-            }.getOrDefault(emptyList())
-            if (parsed.isNotEmpty()) return parsed
+            }
+            if (sb.isNotBlank()) return sb.toString()
         }
-        return emptyList()
+
+        return null
+    }
+
+    private fun buildNonJsonErrorMessage(rawBody: String, endpoint: String): String {
+        val trimmed = rawBody.trim()
+        val lowerEndpoint = endpoint.lowercase()
+        if (lowerEndpoint.contains("models.github.ai") || lowerEndpoint.contains("models.inference.ai.azure.com")) {
+            return "GitHub Models fue retirado y devolvió '$trimmed' en vez de una respuesta de chat. Elige Pollinations (Gratis / Sin Key), Gemini, Groq, NVIDIA u OpenRouter."
+        }
+        val jsonError = runCatching { extractApiErrorMessage(trimmed) }.getOrNull()
+        if (!jsonError.isNullOrBlank()) {
+            return "El proveedor devolvió un error sin respuesta de chat: $jsonError"
+        }
+        val preview = trimmed.take(60).replace("\n", " ")
+        return "El servidor respondió '$preview' en lugar de una respuesta JSON compatible con OpenAI. Verifica la URL o cambia a otro proveedor gratuito (ej. Pollinations, Gemini o Groq)."
+    }
+
+    private fun fetchModelsBlocking(baseUrl: String, apiKey: String): List<String> {
+        val cleanBase = baseUrl.removeSuffix("/chat/completions").trimEnd('/')
+        val modelsUrl = "$cleanBase/models"
+        val requestBuilder = Request.Builder()
+            .url(modelsUrl)
+            .get()
+        if (apiKey.isNotBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+        }
+        return runCatching {
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                if (!response.isSuccessful) return@use emptyList()
+                parseModelsList(response.body?.string().orEmpty(), cleanBase)
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun parseModelsList(rawBody: String, baseUrl: String): List<String> {
@@ -487,11 +529,11 @@ class OpenAiClient {
             lower.contains("generativelanguage.googleapis.com") ->
                 listOf("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite")
             lower.contains("api.groq.com") ->
-                listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b")
+                listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b")
             lower.contains("openrouter.ai") ->
                 listOf("openrouter/free")
-            lower.contains("models.github.ai") || lower.contains("models.inference.ai.azure.com") ->
-                listOf("openai/gpt-4o-mini", "gpt-4o-mini", "openai/gpt-4.1-mini", "openai/gpt-4o")
+            lower.contains("integrate.api.nvidia.com") ->
+                listOf("meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct", "qwen/qwen2.5-72b-instruct")
             lower.contains("pollinations.ai") ->
                 listOf("openai", "gemini", "mistral")
             lower.contains("api.mistral.ai") ->

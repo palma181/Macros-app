@@ -45,18 +45,18 @@ enum class AiPreset(
         id = "groq",
         displayName = "Groq (Gratis)",
         defaultUrl = "https://api.groq.com/openai/v1",
-        defaultModel = "llama-3.3-70b-versatile",
-        supportsVisionHint = "Gratis y ultrarrápido en console.groq.com (llama-3.3-70b-versatile, llama-3.1-8b-instant o openai/gpt-oss-120b)",
+        defaultModel = "openai/gpt-oss-120b",
+        supportsVisionHint = "Gratis y ultrarrápido en console.groq.com (openai/gpt-oss-120b o openai/gpt-oss-20b)",
         signupUrl = "https://console.groq.com/keys",
         isFreeTier = true
     ),
-    GITHUB_MODELS(
-        id = "github",
-        displayName = "GitHub (Gratis)",
-        defaultUrl = "https://models.github.ai/inference",
-        defaultModel = "openai/gpt-4o-mini",
-        supportsVisionHint = "Gratis con token de GitHub con permiso models:read · openai/gpt-4o-mini soporta fotos",
-        signupUrl = "https://github.com/settings/tokens",
+    NVIDIA(
+        id = "nvidia",
+        displayName = "NVIDIA (Gratis)",
+        defaultUrl = "https://integrate.api.nvidia.com/v1",
+        defaultModel = "meta/llama-3.3-70b-instruct",
+        supportsVisionHint = "Gratis sin tarjeta en build.nvidia.com · catálogo amplio de modelos rápidos",
+        signupUrl = "https://build.nvidia.com",
         isFreeTier = true
     ),
     OPENROUTER(

@@ -39,13 +39,36 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     val aiConfigFlow: Flow<AiConfig> = context.dataStore.data.map { prefs ->
-        val preset = AiPreset.fromId(prefs[Keys.AI_PRESET] ?: AiPreset.POLLINATIONS.id)
-        AiConfig(
-            preset = preset,
-            baseUrl = prefs[Keys.AI_URL] ?: preset.defaultUrl,
-            apiKey = prefs[Keys.AI_KEY] ?: "",
-            model = prefs[Keys.AI_MODEL] ?: preset.defaultModel
-        )
+        val rawPresetId = prefs[Keys.AI_PRESET] ?: AiPreset.POLLINATIONS.id
+        val rawUrl = prefs[Keys.AI_URL].orEmpty()
+        val isRetiredGithub = rawPresetId == "github" ||
+            rawUrl.contains("models.github.ai", ignoreCase = true) ||
+            rawUrl.contains("models.inference.ai.azure.com", ignoreCase = true)
+
+        if (isRetiredGithub) {
+            AiConfig(
+                preset = AiPreset.POLLINATIONS,
+                baseUrl = AiPreset.POLLINATIONS.defaultUrl,
+                apiKey = "",
+                model = AiPreset.POLLINATIONS.defaultModel
+            )
+        } else {
+            val preset = AiPreset.fromId(rawPresetId)
+            val storedModel = prefs[Keys.AI_MODEL] ?: preset.defaultModel
+            val migratedModel = when {
+                storedModel == "gemini-2.0-flash" -> "gemini-3.5-flash-lite"
+                rawUrl.contains("api.groq.com", ignoreCase = true) &&
+                    (storedModel == "llama-3.3-70b-versatile" || storedModel == "llama-3.1-8b-instant") ->
+                    "openai/gpt-oss-120b"
+                else -> storedModel
+            }
+            AiConfig(
+                preset = preset,
+                baseUrl = rawUrl.ifBlank { preset.defaultUrl },
+                apiKey = prefs[Keys.AI_KEY] ?: "",
+                model = migratedModel
+            )
+        }
     }
 
     suspend fun saveGoals(goals: MacroGoals) {

@@ -325,4 +325,33 @@ class OpenAiClientTest {
         assertEquals("gemini-3.5-flash-lite", resolved)
         assertTrue(connRes.getOrThrow().contains("gemini-3.5-flash-lite"))
     }
+
+    @Test
+    fun `plain text OK HTTP 200 returns friendly error instead of JSONException and supports SSE chunks`() = runTest {
+        nextStatusCode = 200
+        nextResponseBody = "OK"
+
+        val client = OpenAiClient()
+        val config = AiConfig(
+            preset = AiPreset.OPENAI,
+            baseUrl = baseUrl,
+            apiKey = "test-key",
+            model = "gpt-4o-mini"
+        )
+
+        val plainRes = client.askCoach(config, "hola")
+        assertTrue(plainRes.isFailure)
+        val errMsg = plainRes.exceptionOrNull()?.message.orEmpty()
+        assertTrue("Unexpected error: $errMsg", errMsg.contains("JSON compatible"))
+        assertTrue(!errMsg.contains("cannot be converted to JSONObject"))
+
+        nextResponseBody = """
+            data: {"choices":[{"delta":{"content":"Hola "}}]}
+            data: {"choices":[{"delta":{"content":"mundo"}}]}
+            data: [DONE]
+        """.trimIndent()
+        val sseRes = client.askCoach(config, "hola")
+        assertTrue(sseRes.isSuccess)
+        assertEquals("Hola mundo", sseRes.getOrThrow())
+    }
 }
