@@ -59,7 +59,9 @@ data class CoachState(
 data class ConnectionTestState(
     val isTesting: Boolean = false,
     val message: String? = null,
-    val isSuccess: Boolean = false
+    val isSuccess: Boolean = false,
+    val isDetectingModels: Boolean = false,
+    val availableModels: List<String> = emptyList()
 )
 
 data class PeriodSummary(
@@ -682,20 +684,54 @@ class MacroViewModel(
     fun testAiConnection(config: AiConfig) {
         viewModelScope.launch {
             repository.saveAiConfig(config)
-            connectionTestFlow.value = ConnectionTestState(isTesting = true)
+            val prevModels = connectionTestFlow.value.availableModels
+            connectionTestFlow.value = ConnectionTestState(isTesting = true, availableModels = prevModels)
             repository.testAiConnection(config).fold(
                 onSuccess = { msg ->
                     connectionTestFlow.value = ConnectionTestState(
                         isTesting = false,
                         message = msg,
-                        isSuccess = true
+                        isSuccess = true,
+                        availableModels = prevModels
                     )
                 },
                 onFailure = { err ->
                     connectionTestFlow.value = ConnectionTestState(
                         isTesting = false,
                         message = err.message ?: "Error de conexión",
-                        isSuccess = false
+                        isSuccess = false,
+                        availableModels = prevModels
+                    )
+                }
+            )
+        }
+    }
+
+    fun detectAvailableModels(config: AiConfig) {
+        viewModelScope.launch {
+            repository.saveAiConfig(config)
+            connectionTestFlow.update {
+                it.copy(isDetectingModels = true, message = null, availableModels = emptyList())
+            }
+            repository.fetchAvailableModels(config).fold(
+                onSuccess = { models ->
+                    val limited = models.take(15)
+                    val first = limited.firstOrNull()
+                    if (first != null && config.model.isBlank()) {
+                        repository.saveAiConfig(config.copy(model = first))
+                    }
+                    connectionTestFlow.value = ConnectionTestState(
+                        isDetectingModels = false,
+                        isSuccess = true,
+                        message = "${limited.size} modelos compatibles encontrados. Toca uno para seleccionarlo.",
+                        availableModels = limited
+                    )
+                },
+                onFailure = { err ->
+                    connectionTestFlow.value = ConnectionTestState(
+                        isDetectingModels = false,
+                        isSuccess = false,
+                        message = err.message ?: "No se pudieron listar los modelos"
                     )
                 }
             )

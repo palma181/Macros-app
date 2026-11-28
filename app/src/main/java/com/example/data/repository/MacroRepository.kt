@@ -52,7 +52,9 @@ class MacroRepository(
         section: com.example.data.model.RecipeSection = com.example.data.model.RecipeSection.MEALS
     ): Result<List<com.example.data.model.RecipeOption>> {
         val config = prefs.aiConfigFlow.first()
-        return openAiClient.generateRecipesFromIngredients(config, ingredients, difficulty, section)
+        return openAiClient.generateRecipesFromIngredients(config, ingredients, difficulty, section) { resolved ->
+            prefs.saveAiConfig(config.copy(model = resolved))
+        }
     }
 
     suspend fun saveWeight(date: String, kg: Double) {
@@ -67,7 +69,9 @@ class MacroRepository(
 
     suspend fun estimateFromText(description: String): Result<MacroEstimation> {
         val config = prefs.aiConfigFlow.first()
-        return openAiClient.estimateFromText(config, description)
+        return openAiClient.estimateFromText(config, description) { resolved ->
+            prefs.saveAiConfig(config.copy(model = resolved))
+        }
     }
 
     suspend fun estimateFromImageUri(uri: Uri, hint: String?): Result<MacroEstimation> {
@@ -75,13 +79,23 @@ class MacroRepository(
         return runCatching {
             ImageProcessor.uriToBase64DataUrl(context, uri)
         }.fold(
-            onSuccess = { dataUrl -> openAiClient.estimateFromImage(config, dataUrl, hint) },
+            onSuccess = { dataUrl ->
+                openAiClient.estimateFromImage(config, dataUrl, hint) { resolved ->
+                    prefs.saveAiConfig(config.copy(model = resolved))
+                }
+            },
             onFailure = { Result.failure(it) }
         )
     }
 
     suspend fun testAiConnection(config: AiConfig): Result<String> {
-        return openAiClient.testConnection(config)
+        return openAiClient.testConnection(config) { resolved ->
+            prefs.saveAiConfig(config.copy(model = resolved))
+        }
+    }
+
+    suspend fun fetchAvailableModels(config: AiConfig): Result<List<String>> {
+        return openAiClient.fetchAvailableModels(config)
     }
 
     suspend fun analyzePeriodWithCoach(
@@ -119,7 +133,9 @@ class MacroRepository(
             append("Días del periodo: $daysCount. ")
             append("Comidas: $mealsArray")
         }
-        return openAiClient.askCoach(config, prompt)
+        return openAiClient.askCoach(config, prompt) { resolved ->
+            prefs.saveAiConfig(config.copy(model = resolved))
+        }
     }
 
     suspend fun askCoachQuestion(question: String, todayDate: String): Result<String> {
@@ -140,7 +156,9 @@ class MacroRepository(
             append("Hoy llevo: kcal=${totals.kcal}, p=${totals.protein}g, c=${totals.carbs}g, f=${totals.fat}g. ")
             append("Pregunta: ${question.trim()}")
         }
-        return openAiClient.askCoach(config, prompt)
+        return openAiClient.askCoach(config, prompt) { resolved ->
+            prefs.saveAiConfig(config.copy(model = resolved))
+        }
     }
 
     suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {

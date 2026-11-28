@@ -26,6 +26,8 @@ class OpenAiClientTest {
     private var lastAuthHeader: String? = null
     private var nextStatusCode: Int = 200
     private var nextResponseBody: String = ""
+    private var nextModelsBody: String = """{"data":[{"id":"whisper-large-v3"},{"id":"gemini-3.5-flash-lite"},{"id":"text-embedding-004"}]}"""
+    private var customChatHandler: ((String) -> Pair<Int, String>)? = null
 
     @Before
     fun setUp() {
@@ -33,9 +35,16 @@ class OpenAiClientTest {
         server.createContext("/v1/chat/completions") { exchange ->
             lastAuthHeader = exchange.requestHeaders.getFirst("Authorization")
             lastRequestBody = exchange.requestBody.bufferedReader().use { it.readText() }
-            val bytes = nextResponseBody.toByteArray(Charsets.UTF_8)
+            val (code, body) = customChatHandler?.invoke(lastRequestBody) ?: (nextStatusCode to nextResponseBody)
+            val bytes = body.toByteArray(Charsets.UTF_8)
             exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(nextStatusCode, bytes.size.toLong())
+            exchange.sendResponseHeaders(code, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.createContext("/v1/models") { exchange ->
+            val bytes = nextModelsBody.toByteArray(Charsets.UTF_8)
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
         server.start()
@@ -276,7 +285,7 @@ class OpenAiClientTest {
     @Test
     fun `all free AiPreset providers define valid baseUrls models and signup links`() {
         val freePresets = AiPreset.entries.filter { it.isFreeTier }
-        assertTrue(freePresets.size >= 8)
+        assertTrue(freePresets.size >= 9)
         freePresets.forEach { preset ->
             assertTrue("Missing URL for ${preset.id}", preset.defaultUrl.startsWith("http"))
             assertTrue("Missing model for ${preset.id}", preset.defaultModel.isNotBlank())
@@ -284,5 +293,36 @@ class OpenAiClientTest {
                 assertTrue("Missing signupUrl for ${preset.id}", preset.signupUrl.startsWith("https://"))
             }
         }
+    }
+
+    @Test
+    fun `fetchAvailableModels filters out whisper and embeddings and auto-recovers 404 model not found`() = runTest {
+        nextModelsBody = """{"data":[{"id":"whisper-large-v3"},{"id":"gemini-3.5-flash-lite"},{"id":"text-embedding-004"}]}"""
+        customChatHandler = { body ->
+            val req = JSONObject(body)
+            if (req.getString("model") == "gemini-2.0-flash") {
+                404 to """{"error":{"message":"Model not found: gemini-2.0-flash"}}"""
+            } else {
+                200 to """{"choices":[{"message":{"content":"OK"}}]}"""
+            }
+        }
+
+        val client = OpenAiClient()
+        val config = AiConfig(
+            preset = AiPreset.GEMINI,
+            baseUrl = baseUrl,
+            apiKey = "test-key",
+            model = "gemini-2.0-flash"
+        )
+
+        val modelsRes = client.fetchAvailableModels(config)
+        assertTrue(modelsRes.isSuccess)
+        assertEquals(listOf("gemini-3.5-flash-lite"), modelsRes.getOrThrow())
+
+        var resolved = ""
+        val connRes = client.testConnection(config) { resolved = it }
+        assertTrue(connRes.isSuccess)
+        assertEquals("gemini-3.5-flash-lite", resolved)
+        assertTrue(connRes.getOrThrow().contains("gemini-3.5-flash-lite"))
     }
 }

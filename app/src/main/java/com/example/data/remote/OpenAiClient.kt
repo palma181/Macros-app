@@ -2,6 +2,9 @@ package com.example.data.remote
 
 import com.example.data.model.AiConfig
 import com.example.data.model.MacroEstimation
+import com.example.data.model.RecipeDifficulty
+import com.example.data.model.RecipeOption
+import com.example.data.model.RecipeSection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -24,7 +27,17 @@ class OpenAiClient {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    suspend fun estimateFromText(config: AiConfig, description: String): Result<MacroEstimation> {
+    private sealed interface AttemptOutcome {
+        data class Success(val text: String) : AttemptOutcome
+        data class ModelNotFound(val code: Int, val detail: String) : AttemptOutcome
+        data class OtherError(val error: Throwable) : AttemptOutcome
+    }
+
+    suspend fun estimateFromText(
+        config: AiConfig,
+        description: String,
+        onModelResolved: suspend (String) -> Unit = {}
+    ): Result<MacroEstimation> {
         val prompt = buildString {
             append("Estima los macros de esta comida (usa una porción típica si no hay cantidades). ")
             append("Responde ÚNICAMENTE con un JSON válido con números enteros: ")
@@ -35,7 +48,8 @@ class OpenAiClient {
         return sendChatCompletion(
             config = config,
             content = prompt,
-            maxTokens = 250
+            maxTokens = 250,
+            onModelResolved = onModelResolved
         ).mapCatching { rawText ->
             parseMacroJson(rawText, defaultName = null)
         }
@@ -44,7 +58,8 @@ class OpenAiClient {
     suspend fun estimateFromImage(
         config: AiConfig,
         dataUrl: String,
-        hint: String? = null
+        hint: String? = null,
+        onModelResolved: suspend (String) -> Unit = {}
     ): Result<MacroEstimation> {
         val instruction = buildString {
             append("Mira la foto de esta comida. Identifica los alimentos y estima los macros de la porción visible. ")
@@ -70,44 +85,64 @@ class OpenAiClient {
         return sendChatCompletion(
             config = config,
             content = contentArray,
-            maxTokens = 350
+            maxTokens = 350,
+            onModelResolved = onModelResolved
         ).mapCatching { rawText ->
             parseMacroJson(rawText, defaultName = "Comida analizada")
         }
     }
 
-    suspend fun askCoach(config: AiConfig, prompt: String): Result<String> {
+    suspend fun askCoach(
+        config: AiConfig,
+        prompt: String,
+        onModelResolved: suspend (String) -> Unit = {}
+    ): Result<String> {
         return sendChatCompletion(
             config = config,
             content = prompt,
-            maxTokens = 700
+            maxTokens = 700,
+            onModelResolved = onModelResolved
         )
     }
 
-    suspend fun testConnection(config: AiConfig): Result<String> {
+    suspend fun testConnection(
+        config: AiConfig,
+        onModelResolved: suspend (String) -> Unit = {}
+    ): Result<String> {
+        var resolvedModel = config.model.trim()
         return sendChatCompletion(
             config = config,
             content = "Responde únicamente con: OK",
-            maxTokens = 20
+            maxTokens = 20,
+            onModelResolved = { newModel ->
+                resolvedModel = newModel
+                onModelResolved(newModel)
+            }
         ).map { reply ->
-            "Conexión exitosa con ${config.model.ifBlank { "el modelo" }} (${reply.trim().take(30)})"
+            val autoNote = if (!resolvedModel.equals(config.model.trim(), ignoreCase = true)) {
+                " · ajustado automáticamente"
+            } else {
+                ""
+            }
+            "Conexión exitosa con ${resolvedModel.ifBlank { "el modelo" }}$autoNote (${reply.trim().take(30)})"
         }
     }
 
     suspend fun generateRecipesFromIngredients(
         config: AiConfig,
         ingredients: List<String>,
-        difficulty: com.example.data.model.RecipeDifficulty?,
-        section: com.example.data.model.RecipeSection = com.example.data.model.RecipeSection.MEALS
-    ): Result<List<com.example.data.model.RecipeOption>> {
+        difficulty: RecipeDifficulty?,
+        section: RecipeSection = RecipeSection.MEALS,
+        onModelResolved: suspend (String) -> Unit = {}
+    ): Result<List<RecipeOption>> {
         val levelInstruction = when (difficulty) {
             null -> "Incluye exactamente 3 opciones: una de nivel Básico, una Intermedio y una Avanzado."
             else -> "Incluye 3 opciones variadas de nivel ${difficulty.label}."
         }
         val kindInstruction = when (section) {
-            com.example.data.model.RecipeSection.MEALS ->
+            RecipeSection.MEALS ->
                 "Eres chef y nutricionista. Crea platillos completos de cocina con estos ingredientes disponibles: "
-            com.example.data.model.RecipeSection.SNACKS_DRINKS ->
+            RecipeSection.SNACKS_DRINKS ->
                 "Eres nutricionista deportivo y mixólogo saludable. Crea snacks, bowls de fruta, batidos o bebidas funcionales (aprovechando los suplementos si se incluyen) con estos ingredientes disponibles: "
         }
         val prompt = buildString {
@@ -123,24 +158,25 @@ class OpenAiClient {
         return sendChatCompletion(
             config = config,
             content = prompt,
-            maxTokens = 1400
+            maxTokens = 1400,
+            onModelResolved = onModelResolved
         ).mapCatching { rawText ->
             val match = Regex("""\{[\s\S]*\}""").find(rawText)
                 ?: throw IllegalStateException("La IA no devolvió un JSON válido de recetas.")
             val root = JSONObject(match.value)
             val arr = root.optJSONArray("recipes")
                 ?: throw IllegalStateException("No se encontró el campo recipes en la respuesta.")
-            val list = mutableListOf<com.example.data.model.RecipeOption>()
+            val list = mutableListOf<RecipeOption>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val ingArr = obj.optJSONArray("ingredients") ?: JSONArray()
                 val ingList = (0 until ingArr.length()).map { idx -> ingArr.optString(idx) }.filter { it.isNotBlank() }
                 val stepsArr = obj.optJSONArray("steps") ?: JSONArray()
                 val stepList = (0 until stepsArr.length()).map { idx -> stepsArr.optString(idx) }.filter { it.isNotBlank() }
-                val diff = com.example.data.model.RecipeDifficulty.fromId(obj.optString("difficulty", "basico"))
+                val diff = RecipeDifficulty.fromId(obj.optString("difficulty", "basico"))
                 val title = obj.optString("title", "Receta sugerida").trim()
                 list.add(
-                    com.example.data.model.RecipeOption(
+                    RecipeOption(
                         id = "ai_${System.currentTimeMillis()}_$i",
                         title = title,
                         difficulty = diff,
@@ -163,34 +199,109 @@ class OpenAiClient {
         }
     }
 
-    private suspend fun sendChatCompletion(
-        config: AiConfig,
-        content: Any,
-        maxTokens: Int
-    ): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun fetchAvailableModels(config: AiConfig): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
             val baseUrl = config.baseUrl.trim().trimEnd('/')
             if (baseUrl.isBlank()) {
-                throw IllegalStateException("Configura la URL base de tu IA en la pestaña IA.")
+                throw IllegalStateException("Configura la URL base de tu IA primero.")
             }
-            val model = config.model.trim()
-            if (model.isBlank()) {
-                throw IllegalStateException("Configura el nombre del modelo en la pestaña IA.")
+            val apiKey = config.apiKey.trim()
+            if (apiKey.isBlank() && !isKeyOptionalHost(baseUrl)) {
+                throw IllegalStateException("Ingresa tu clave de API para consultar modelos disponibles.")
             }
-            val isLocalHost = baseUrl.contains("localhost", ignoreCase = true) ||
-                baseUrl.contains("127.0.0.1") ||
-                baseUrl.contains("10.0.2.2") ||
-                baseUrl.contains("192.168.")
-            if (config.apiKey.isBlank() && !isLocalHost) {
-                throw IllegalStateException("Falta tu clave de API. Configúrala en la pestaña IA.")
-            }
-
-            val endpoint = if (baseUrl.endsWith("/chat/completions")) {
-                baseUrl
+            val discovered = fetchModelsBlocking(baseUrl, apiKey)
+            if (discovered.isEmpty()) {
+                val fallback = fallbackModelsFor(baseUrl)
+                if (fallback.isNotEmpty()) fallback
+                else throw IOException("El proveedor no devolvió una lista de modelos.")
             } else {
-                "$baseUrl/chat/completions"
+                discovered
             }
+        }
+    }
 
+    private suspend fun sendChatCompletion(
+        config: AiConfig,
+        content: Any,
+        maxTokens: Int,
+        onModelResolved: suspend (String) -> Unit
+    ): Result<String> {
+        val baseUrl = config.baseUrl.trim().trimEnd('/')
+        if (baseUrl.isBlank()) {
+            return Result.failure(IllegalStateException("Configura la URL base de tu IA en la pestaña IA."))
+        }
+        val requestedModel = config.model.trim()
+        if (requestedModel.isBlank()) {
+            return Result.failure(IllegalStateException("Configura el nombre del modelo en la pestaña IA."))
+        }
+        val apiKey = config.apiKey.trim()
+        if (apiKey.isBlank() && !isKeyOptionalHost(baseUrl)) {
+            return Result.failure(IllegalStateException("Falta tu clave de API. Configúrala en la pestaña IA o usa Pollinations (sin key)."))
+        }
+
+        val endpoint = if (baseUrl.endsWith("/chat/completions")) {
+            baseUrl
+        } else {
+            "$baseUrl/chat/completions"
+        }
+
+        val initialOutcome = withContext(Dispatchers.IO) {
+            executeCompletionOnce(endpoint, apiKey, requestedModel, content, maxTokens)
+        }
+
+        return when (initialOutcome) {
+            is AttemptOutcome.Success -> Result.success(initialOutcome.text)
+            is AttemptOutcome.OtherError -> Result.failure(initialOutcome.error)
+            is AttemptOutcome.ModelNotFound -> {
+                val liveModels = withContext(Dispatchers.IO) {
+                    runCatching { fetchModelsBlocking(baseUrl, apiKey) }.getOrDefault(emptyList())
+                }
+                val candidates = (liveModels + fallbackModelsFor(baseUrl))
+                    .distinct()
+                    .filter { !it.equals(requestedModel, ignoreCase = true) }
+                    .take(5)
+
+                var lastFailureDetail = initialOutcome.detail
+                for (candidate in candidates) {
+                    val retryOutcome = withContext(Dispatchers.IO) {
+                        executeCompletionOnce(endpoint, apiKey, candidate, content, maxTokens)
+                    }
+                    when (retryOutcome) {
+                        is AttemptOutcome.Success -> {
+                            onModelResolved(candidate)
+                            return Result.success(retryOutcome.text)
+                        }
+                        is AttemptOutcome.ModelNotFound -> {
+                            lastFailureDetail = retryOutcome.detail
+                        }
+                        is AttemptOutcome.OtherError -> {
+                            return Result.failure(retryOutcome.error)
+                        }
+                    }
+                }
+
+                val availableHint = if (liveModels.isNotEmpty()) {
+                    " Modelos disponibles en tu cuenta: ${liveModels.take(4).joinToString(", ")}"
+                } else {
+                    ""
+                }
+                Result.failure(
+                    IOException(
+                        "Modelo '$requestedModel' no encontrado (${initialOutcome.code}): $lastFailureDetail.$availableHint"
+                    )
+                )
+            }
+        }
+    }
+
+    private fun executeCompletionOnce(
+        endpoint: String,
+        apiKey: String,
+        model: String,
+        content: Any,
+        maxTokens: Int
+    ): AttemptOutcome {
+        return try {
             val bodyJson = JSONObject().apply {
                 put("model", model)
                 put("messages", JSONArray().apply {
@@ -207,35 +318,201 @@ class OpenAiClient {
                 .post(bodyJson.toString().toRequestBody(jsonMediaType))
                 .addHeader("Content-Type", "application/json")
 
-            if (config.apiKey.isNotBlank()) {
-                requestBuilder.addHeader("Authorization", "Bearer ${config.apiKey.trim()}")
+            if (apiKey.isNotBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $apiKey")
             }
 
             client.newCall(requestBuilder.build()).execute().use { response ->
                 val rawBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     val detail = extractApiErrorMessage(rawBody) ?: rawBody.take(160)
+                    if (isModelNotFoundError(response.code, detail)) {
+                        return AttemptOutcome.ModelNotFound(response.code, detail)
+                    }
                     val friendlyPrefix = when (response.code) {
                         401 -> "Clave de API inválida o sin autorización (401)"
-                        403 -> "Acceso denegado (403)"
+                        403 -> "Acceso denegado o permisos faltantes (403)"
                         404 -> "Endpoint o modelo no encontrado (404)"
                         429 -> "Límite de peticiones alcanzado o sin saldo (429)"
                         else -> "Error HTTP ${response.code}"
                     }
-                    throw IOException("$friendlyPrefix: $detail")
+                    return AttemptOutcome.OtherError(IOException("$friendlyPrefix: $detail"))
                 }
 
                 val json = JSONObject(rawBody)
                 val choices = json.optJSONArray("choices")
-                    ?: throw IOException("Respuesta inesperada del proveedor (sin choices).")
+                    ?: return AttemptOutcome.OtherError(IOException("Respuesta inesperada del proveedor (sin choices)."))
                 if (choices.length() == 0) {
-                    throw IOException("El proveedor devolvió una respuesta vacía.")
+                    return AttemptOutcome.OtherError(IOException("El proveedor devolvió una respuesta vacía."))
                 }
                 val message = choices.getJSONObject(0).getJSONObject("message")
-                extractMessageText(message)
-                    ?: throw IOException("No se pudo leer el contenido de la respuesta de la IA.")
+                val text = extractMessageText(message)
+                    ?: return AttemptOutcome.OtherError(IOException("No se pudo leer el contenido de la respuesta de la IA."))
+                AttemptOutcome.Success(text)
+            }
+        } catch (t: Throwable) {
+            AttemptOutcome.OtherError(t)
+        }
+    }
+
+    private fun fetchModelsBlocking(baseUrl: String, apiKey: String): List<String> {
+        val cleanBase = baseUrl.removeSuffix("/chat/completions").trimEnd('/')
+        val urlsToTry = buildList {
+            add("$cleanBase/models")
+            if (cleanBase.contains("models.github.ai", ignoreCase = true)) {
+                add("https://models.github.ai/catalog/models")
             }
         }
+
+        for (modelsUrl in urlsToTry) {
+            val requestBuilder = Request.Builder()
+                .url(modelsUrl)
+                .get()
+            if (apiKey.isNotBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+            }
+            val parsed = runCatching {
+                client.newCall(requestBuilder.build()).execute().use { response ->
+                    if (!response.isSuccessful) return@use emptyList()
+                    parseModelsList(response.body?.string().orEmpty(), cleanBase)
+                }
+            }.getOrDefault(emptyList())
+            if (parsed.isNotEmpty()) return parsed
+        }
+        return emptyList()
+    }
+
+    private fun parseModelsList(rawBody: String, baseUrl: String): List<String> {
+        val trimmed = rawBody.trim()
+        if (trimmed.isBlank()) return emptyList()
+
+        val itemsArray: JSONArray = when {
+            trimmed.startsWith("[") -> JSONArray(trimmed)
+            else -> {
+                val obj = JSONObject(trimmed)
+                obj.optJSONArray("data")
+                    ?: obj.optJSONArray("models")
+                    ?: return emptyList()
+            }
+        }
+
+        val isGemini = baseUrl.contains("generativelanguage.googleapis.com", ignoreCase = true)
+        val isOpenRouter = baseUrl.contains("openrouter.ai", ignoreCase = true)
+
+        val collected = mutableListOf<Pair<String, Boolean>>()
+        for (i in 0 until itemsArray.length()) {
+            val elem = itemsArray.opt(i)
+            var id = ""
+            var isFree = false
+            when (elem) {
+                is String -> id = elem
+                is JSONObject -> {
+                    id = elem.optString("id").ifBlank { elem.optString("name") }.trim()
+                    if (isOpenRouter) {
+                        val pricing = elem.optJSONObject("pricing")
+                        val promptPrice = pricing?.optString("prompt")?.toDoubleOrNull()
+                        val compPrice = pricing?.optString("completion")?.toDoubleOrNull()
+                        isFree = id == "openrouter/free" ||
+                            id.endsWith(":free", ignoreCase = true) ||
+                            (promptPrice == 0.0 && compPrice == 0.0)
+                    }
+                }
+            }
+            if (isGemini) {
+                id = id.removePrefix("models/")
+            }
+            if (id.isBlank() || isNonChatModel(id)) continue
+            collected.add(id to isFree)
+        }
+
+        val filtered = if (isOpenRouter) {
+            val freeOnly = collected.filter { it.second }.map { it.first }
+            if (freeOnly.isNotEmpty()) listOf("openrouter/free") + freeOnly else listOf("openrouter/free") + collected.map { it.first }
+        } else {
+            collected.map { it.first }
+        }
+
+        return filtered.distinct().sortedBy { modelPriorityScore(it) }
+    }
+
+    private fun isNonChatModel(id: String): Boolean {
+        val lower = id.lowercase()
+        val blocked = listOf(
+            "whisper", "tts", "orpheus", "embed", "embedding", "moderation",
+            "guard", "imagen", "veo", "dall-e", "flux", "rerank", "bge-",
+            "realtime", "transcribe", "aqa", "learnlm"
+        )
+        return blocked.any { lower.contains(it) }
+    }
+
+    private fun modelPriorityScore(id: String): Int {
+        val lower = id.lowercase()
+        return when {
+            lower == "openrouter/free" -> 0
+            lower.endsWith(":free") -> 1
+            lower == "openai" -> 2
+            lower.contains("flash-lite") -> 3
+            lower.contains("flash") -> 4
+            lower.contains("gpt-4o-mini") -> 5
+            lower.contains("llama-3.3") -> 6
+            lower.contains("mistral-small") -> 7
+            lower.contains("gpt-oss") -> 8
+            lower.contains("gemma") -> 9
+            lower.contains("qwen") -> 10
+            lower.contains("llama-3.1") -> 11
+            else -> 20
+        }
+    }
+
+    private fun isModelNotFoundError(code: Int, detail: String): Boolean {
+        if (code == 404) return true
+        if (code != 400 && code != 422) return false
+        val lower = detail.lowercase()
+        return lower.contains("model") && (
+            lower.contains("not found") ||
+                lower.contains("not_found") ||
+                lower.contains("does not exist") ||
+                lower.contains("decommissioned") ||
+                lower.contains("deprecated") ||
+                lower.contains("unknown") ||
+                lower.contains("not supported") ||
+                lower.contains("unavailable") ||
+                lower.contains("invalid")
+            )
+    }
+
+    private fun fallbackModelsFor(baseUrl: String): List<String> {
+        val lower = baseUrl.lowercase()
+        return when {
+            lower.contains("generativelanguage.googleapis.com") ->
+                listOf("gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite")
+            lower.contains("api.groq.com") ->
+                listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b")
+            lower.contains("openrouter.ai") ->
+                listOf("openrouter/free")
+            lower.contains("models.github.ai") || lower.contains("models.inference.ai.azure.com") ->
+                listOf("openai/gpt-4o-mini", "gpt-4o-mini", "openai/gpt-4.1-mini", "openai/gpt-4o")
+            lower.contains("pollinations.ai") ->
+                listOf("openai", "gemini", "mistral")
+            lower.contains("api.mistral.ai") ->
+                listOf("mistral-small-latest", "pixtral-12b-2409", "open-mistral-nemo")
+            lower.contains("api.cerebras.ai") ->
+                listOf("gpt-oss-120b", "qwen-3.8-27b", "llama3.1-8b")
+            lower.contains("api.sambanova.ai") ->
+                listOf("gemma-4-31B-it", "gpt-oss-120b", "Meta-Llama-3.3-70B-Instruct")
+            lower.contains("router.huggingface.co") ->
+                listOf("meta-llama/Llama-3.1-8B-Instruct:fastest", "Qwen/Qwen2.5-7B-Instruct:fastest", "deepseek-ai/DeepSeek-R1:fastest")
+            else -> emptyList()
+        }
+    }
+
+    private fun isKeyOptionalHost(baseUrl: String): Boolean {
+        val lower = baseUrl.lowercase()
+        return lower.contains("localhost") ||
+            lower.contains("127.0.0.1") ||
+            lower.contains("10.0.2.2") ||
+            lower.contains("192.168.") ||
+            lower.contains("pollinations.ai")
     }
 
     private fun extractMessageText(message: JSONObject): String? {

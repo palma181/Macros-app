@@ -39,7 +39,7 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     val aiConfigFlow: Flow<AiConfig> = context.dataStore.data.map { prefs ->
-        val preset = AiPreset.fromId(prefs[Keys.AI_PRESET] ?: AiPreset.OPENAI.id)
+        val preset = AiPreset.fromId(prefs[Keys.AI_PRESET] ?: AiPreset.POLLINATIONS.id)
         AiConfig(
             preset = preset,
             baseUrl = prefs[Keys.AI_URL] ?: preset.defaultUrl,

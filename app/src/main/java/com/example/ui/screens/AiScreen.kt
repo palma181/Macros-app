@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -74,6 +75,7 @@ fun AiScreen(
     uiState: MacroUiState,
     onSaveConfig: (AiConfig) -> Unit,
     onTestConnection: (AiConfig) -> Unit,
+    onDetectModels: (AiConfig) -> Unit,
     onAnalyzeWeek: () -> Unit,
     onAnalyzeMonth: () -> Unit,
     onAskCoach: (String) -> Unit,
@@ -224,8 +226,24 @@ fun AiScreen(
                         OutlinedTextField(
                             value = apiKey,
                             onValueChange = { apiKey = it },
-                            label = { Text("Clave de API") },
-                            placeholder = { Text("sk-...") },
+                            label = {
+                                Text(
+                                    if (selectedPreset.requiresApiKey) {
+                                        "Clave de API"
+                                    } else {
+                                        "Clave de API (opcional)"
+                                    }
+                                )
+                            },
+                            placeholder = {
+                                Text(
+                                    if (selectedPreset.requiresApiKey) {
+                                        "Pega aquí tu API key..."
+                                    } else {
+                                        "Opcional (puede quedar vacío)"
+                                    }
+                                )
+                            },
                             singleLine = true,
                             visualTransformation = if (showKey) {
                                 VisualTransformation.None
@@ -261,6 +279,58 @@ fun AiScreen(
                                 .bringIntoViewOnFocus()
                                 .testTag("ai_model_input")
                         )
+
+                        OutlinedButton(
+                            onClick = { onDetectModels(currentDraftConfig()) },
+                            enabled = !uiState.connectionTest.isDetectingModels && !uiState.connectionTest.isTesting,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("ai_detect_models_button")
+                        ) {
+                            if (uiState.connectionTest.isDetectingModels) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Buscando modelos compatibles…")
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Detectar modelos de mi API")
+                            }
+                        }
+
+                        AnimatedVisibility(visible = uiState.connectionTest.availableModels.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Modelos encontrados (toca para usar):",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    uiState.connectionTest.availableModels.forEachIndexed { idx, candidate ->
+                                        FilterChip(
+                                            selected = model.equals(candidate, ignoreCase = true),
+                                            onClick = {
+                                                model = candidate
+                                                onSaveConfig(currentDraftConfig().copy(model = candidate))
+                                            },
+                                            label = { Text(candidate) },
+                                            modifier = Modifier.testTag("ai_detected_model_$idx")
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -393,7 +463,7 @@ fun AiScreen(
                             )
                         }
                         Text(
-                            text = "ChatGPT y Claude no permiten iniciar sesión desde apps externas sin pagar API. Para no gastar, usa cualquiera de los proveedores gratis de arriba (Gemini, Groq, GitHub, Mistral, Cerebras, SambaNova, HuggingFace u OpenRouter), o envía tu resumen directo a ChatGPT o Claude:",
+                            text = "ChatGPT y Claude no permiten iniciar sesión desde apps externas sin pagar API. Para no gastar, usa Pollinations (Gratis / Sin Key) o cualquiera de los proveedores gratis de arriba, o envía tu resumen directo a ChatGPT o Claude:",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

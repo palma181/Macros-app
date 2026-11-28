@@ -315,6 +315,7 @@ fun MisMacrosApp() {
                             uiState = uiState,
                             onSaveConfig = viewModel::saveAiConfig,
                             onTestConnection = viewModel::testAiConnection,
+                            onDetectModels = viewModel::detectAvailableModels,
                             onAnalyzeWeek = viewModel::analyzeWeekWithCoach,
                             onAnalyzeMonth = viewModel::analyzeMonthWithCoach,
                             onAskCoach = viewModel::askCoach,
