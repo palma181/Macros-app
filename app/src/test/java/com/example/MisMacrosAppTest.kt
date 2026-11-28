@@ -308,10 +308,20 @@ class MisMacrosAppTest {
             hasText("Pollo al ajillo expres") and hasAnyAncestor(hasTestTag("recipes_lazy_column"))
         ).assertIsDisplayed()
 
-        // 3. Verify ChatGPT/Claude bridge buttons exist in IA screen
+        // 3. Verify free API presets + Get Key button + ChatGPT/Claude bridge buttons in IA screen
         composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_ai"))
         composeRule.onNodeWithTag("nav_ai").performClick()
         composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 8_000) {
+            composeRule.onAllNodesWithTag("ai_preset_github").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("ai_preset_github").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("ai_get_key_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_preset_mistral").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_preset_cerebras").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_preset_sambanova").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_preset_huggingface").assertIsDisplayed()
         waitUntilScrollToNode("ai_lazy_column", hasTestTag("external_ai_week_button"))
         composeRule.onNodeWithTag("external_ai_week_button").assertIsDisplayed()
         composeRule.onNodeWithTag("external_ai_question_button").assertIsDisplayed()

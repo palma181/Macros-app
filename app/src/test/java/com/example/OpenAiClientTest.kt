@@ -272,4 +272,17 @@ class OpenAiClientTest {
         assertEquals(com.example.data.model.RecipeSection.SNACKS_DRINKS, recipe.section)
         assertTrue(lastRequestBody.contains("suplementos"))
     }
+
+    @Test
+    fun `all free AiPreset providers define valid baseUrls models and signup links`() {
+        val freePresets = AiPreset.entries.filter { it.isFreeTier }
+        assertTrue(freePresets.size >= 8)
+        freePresets.forEach { preset ->
+            assertTrue("Missing URL for ${preset.id}", preset.defaultUrl.startsWith("http"))
+            assertTrue("Missing model for ${preset.id}", preset.defaultModel.isNotBlank())
+            if (preset != AiPreset.LOCAL) {
+                assertTrue("Missing signupUrl for ${preset.id}", preset.signupUrl.startsWith("https://"))
+            }
+        }
+    }
 }

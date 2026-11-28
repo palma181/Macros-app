@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -40,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -130,7 +134,7 @@ fun AiScreen(
                         )
 
                         Text(
-                            text = "Proveedor compatible con OpenAI",
+                            text = "Opciones gratuitas y compatibles con OpenAI",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -152,6 +156,56 @@ fun AiScreen(
                                     label = { Text(preset.displayName) },
                                     modifier = Modifier.testTag("ai_preset_${preset.id}")
                                 )
+                            }
+                        }
+
+                        if (selectedPreset.signupUrl.isNotBlank()) {
+                            Surface(
+                                color = if (selectedPreset.isFreeTier) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                },
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = if (selectedPreset.isFreeTier) {
+                                            "Clave gratuita disponible"
+                                        } else {
+                                            "Consola de claves"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, Uri.parse(selectedPreset.signupUrl))
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("ai_get_key_button")
+                                    ) {
+                                        Text(
+                                            text = if (selectedPreset.isFreeTier) "Obtener gratis" else "Abrir consola"
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.AutoMirrored.Outlined.OpenInNew,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -339,7 +393,7 @@ fun AiScreen(
                             )
                         }
                         Text(
-                            text = "ChatGPT y Claude no permiten iniciar sesión desde apps externas sin pagar API. Para no gastar, usa Gemini/Groq/OpenRouter (:free) arriba, o envía tu resumen directo a tu app de ChatGPT o Claude:",
+                            text = "ChatGPT y Claude no permiten iniciar sesión desde apps externas sin pagar API. Para no gastar, usa cualquiera de los proveedores gratis de arriba (Gemini, Groq, GitHub, Mistral, Cerebras, SambaNova, HuggingFace u OpenRouter), o envía tu resumen directo a ChatGPT o Claude:",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
