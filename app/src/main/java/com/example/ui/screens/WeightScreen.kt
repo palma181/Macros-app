@@ -52,6 +52,7 @@ import com.example.R
 import com.example.data.local.WeightEntity
 import com.example.ui.MacroUiState
 import com.example.ui.components.WeightLineChart
+import com.example.ui.components.bringIntoViewOnFocus
 import com.example.util.DateUtils
 import java.util.Locale
 
@@ -141,6 +142,7 @@ fun WeightScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier
                                     .weight(1f)
+                                    .bringIntoViewOnFocus()
                                     .testTag("weight_kg_input")
                             )
                             OutlinedButton(

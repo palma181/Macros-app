@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.model.MacroGoals
 import com.example.ui.MacroUiState
+import com.example.ui.components.bringIntoViewOnFocus
 
 @Composable
 fun GoalsScreen(
@@ -283,6 +284,6 @@ private fun GoalInputField(
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier
+        modifier = modifier.bringIntoViewOnFocus()
     )
 }

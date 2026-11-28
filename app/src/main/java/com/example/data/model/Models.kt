@@ -24,35 +24,35 @@ enum class AiPreset(
         displayName = "OpenAI",
         defaultUrl = "https://api.openai.com/v1",
         defaultModel = "gpt-4o-mini",
-        supportsVisionHint = "gpt-4o-mini / gpt-4o soportan fotos y texto"
+        supportsVisionHint = "Requiere clave de API de platform.openai.com (usa saldo API, separado de ChatGPT Plus)"
     ),
     GEMINI(
         id = "gemini",
-        displayName = "Gemini",
+        displayName = "Gemini (Gratis)",
         defaultUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
         defaultModel = "gemini-2.0-flash",
-        supportsVisionHint = "gemini-2.0-flash soporta fotos y texto"
+        supportsVisionHint = "Nivel gratuito sin pagar en Google AI Studio · soporta fotos y texto"
     ),
     OPENROUTER(
         id = "openrouter",
         displayName = "OpenRouter",
         defaultUrl = "https://openrouter.ai/api/v1",
-        defaultModel = "openai/gpt-4o-mini",
-        supportsVisionHint = "Elige un modelo multimodal para analizar fotos"
+        defaultModel = "meta-llama/llama-3.2-11b-vision-instruct:free",
+        supportsVisionHint = "Modelos terminados en :free son gratis sin saldo (o elige gpt-4o-mini / claude)"
     ),
     GROQ(
         id = "groq",
-        displayName = "Groq",
+        displayName = "Groq (Gratis)",
         defaultUrl = "https://api.groq.com/openai/v1",
         defaultModel = "meta-llama/llama-4-scout-17b-16e-instruct",
-        supportsVisionHint = "llama-4-scout soporta visión; llama-3.3-70b solo texto"
+        supportsVisionHint = "Nivel gratuito rápido en console.groq.com · llama-4-scout soporta fotos"
     ),
     LOCAL(
         id = "local",
         displayName = "Ollama / Local",
         defaultUrl = "http://localhost:11434/v1",
         defaultModel = "llava",
-        supportsVisionHint = "Usa llava, qwen2.5vl o gemma3 para fotos locales"
+        supportsVisionHint = "100% gratis sin API key en tu PC/red local (llava, qwen2.5vl o gemma3)"
     ),
     CUSTOM(
         id = "custom",

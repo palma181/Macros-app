@@ -22,7 +22,9 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WifiTethering
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -58,6 +61,8 @@ import com.example.R
 import com.example.data.model.AiConfig
 import com.example.data.model.AiPreset
 import com.example.ui.MacroUiState
+import com.example.ui.components.bringIntoViewOnFocus
+import com.example.util.ExternalAiBridge
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -87,6 +92,7 @@ fun AiScreen(
     }
 
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     fun currentDraftConfig() = AiConfig(
         preset = selectedPreset,
@@ -102,7 +108,8 @@ fun AiScreen(
         LazyColumn(
             modifier = Modifier
                 .widthIn(max = 640.dp)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .testTag("ai_lazy_column"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -156,6 +163,7 @@ fun AiScreen(
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewOnFocus()
                                 .testTag("ai_url_input")
                         )
 
@@ -184,6 +192,7 @@ fun AiScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewOnFocus()
                                 .testTag("ai_key_input")
                         )
 
@@ -195,6 +204,7 @@ fun AiScreen(
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewOnFocus()
                                 .testTag("ai_model_input")
                         )
 
@@ -301,6 +311,106 @@ fun AiScreen(
                 }
             }
 
+            // No-API-Key Card: Use user's ChatGPT / Claude app directly
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                    ),
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Usar ChatGPT o Claude sin API Key",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Text(
+                            text = "ChatGPT y Claude no permiten iniciar sesión desde apps externas sin pagar API. Para no gastar, usa Gemini/Groq/OpenRouter (:free) arriba, o envía tu resumen directo a tu app de ChatGPT o Claude:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val week = uiState.weekSummary
+                                    val weekMeals = uiState.allMeals.filter {
+                                        it.date in week.startDate..week.endDate
+                                    }
+                                    val prompt = ExternalAiBridge.buildCoachPeriodPrompt(
+                                        periodLabel = "semana",
+                                        daysCount = 7,
+                                        goals = uiState.goals,
+                                        meals = weekMeals
+                                    )
+                                    ExternalAiBridge.sharePromptToExternalApp(
+                                        context = context,
+                                        prompt = prompt,
+                                        chooserTitle = "Enviar a ChatGPT o Claude"
+                                    )
+                                    onCopiedMessage("Prompt copiado. Elige ChatGPT o Claude.")
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("external_ai_week_button")
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Enviar semana", maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val prompt = ExternalAiBridge.buildCoachQuestionPrompt(
+                                        question = question.ifBlank { "¿Qué me recomiendas cenar hoy para completar mis macros?" },
+                                        goals = uiState.goals,
+                                        todayTotals = uiState.dayTotals
+                                    )
+                                    ExternalAiBridge.sharePromptToExternalApp(
+                                        context = context,
+                                        prompt = prompt,
+                                        chooserTitle = "Enviar pregunta a ChatGPT o Claude"
+                                    )
+                                    onCopiedMessage("Pregunta copiada. Elige ChatGPT o Claude.")
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("external_ai_question_button")
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Enviar duda", maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Coach IA Card
             item {
                 Card(
@@ -360,6 +470,7 @@ fun AiScreen(
                             maxLines = 4,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewOnFocus()
                                 .testTag("coach_question_input")
                         )
 

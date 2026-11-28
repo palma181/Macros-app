@@ -21,6 +21,7 @@ import com.example.data.model.RecipeSection
 import com.example.data.preferences.AppPreferencesRepository
 import com.example.data.repository.MacroRepository
 import com.example.util.DateUtils
+import com.example.util.ExternalAiBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -391,6 +392,34 @@ class MacroViewModel(
         }
     }
 
+    fun applyParsedMealResponse(rawText: String): Boolean {
+        return ExternalAiBridge.parseMacroResponse(rawText).fold(
+            onSuccess = { est ->
+                editorFlow.update { current ->
+                    current.copy(
+                        name = if (current.name.isBlank()) (est.name ?: "") else current.name,
+                        kcalText = est.kcal.toString(),
+                        proteinText = est.protein.toString(),
+                        carbsText = est.carbs.toString(),
+                        fatText = est.fat.toString(),
+                        aiStatus = "Macros importados desde la respuesta pegada.",
+                        aiError = null
+                    )
+                }
+                true
+            },
+            onFailure = { err ->
+                editorFlow.update {
+                    it.copy(
+                        aiStatus = null,
+                        aiError = err.message ?: "No se pudieron leer los macros pegados."
+                    )
+                }
+                false
+            }
+        )
+    }
+
     fun saveMealFromEditor() {
         val draft = editorFlow.value
         val cleanName = draft.name.trim()
@@ -547,6 +576,29 @@ class MacroViewModel(
                 }
             )
         }
+    }
+
+    fun importExternalRecipes(rawText: String): Boolean {
+        val currentState = recipeStudioFlow.value
+        val section = currentState.activeSection
+        return ExternalAiBridge.parseRecipesResponse(rawText, currentState.selectedIngredients, section).fold(
+            onSuccess = { list ->
+                recipeStudioFlow.update { state ->
+                    state.copy(
+                        aiRecipesBySection = state.aiRecipesBySection + (section to list),
+                        aiError = null
+                    )
+                }
+                showSnackbar("Recetas importadas (${list.size})")
+                true
+            },
+            onFailure = { err ->
+                recipeStudioFlow.update {
+                    it.copy(aiError = err.message ?: "No se pudieron leer las recetas pegadas.")
+                }
+                false
+            }
+        )
     }
 
     fun openRecipeManual(recipe: RecipeOption) {

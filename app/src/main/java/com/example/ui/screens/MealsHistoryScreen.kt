@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.local.MealEntity
 import com.example.data.model.MealType
 import com.example.ui.MacroUiState
+import com.example.ui.components.bringIntoViewOnFocus
 import com.example.ui.theme.LocalMacroColors
 import com.example.util.DateUtils
 
@@ -172,6 +173,7 @@ fun MealsHistoryScreen(
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .bringIntoViewOnFocus()
                             .testTag("history_search_input")
                     )
 

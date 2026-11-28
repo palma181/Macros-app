@@ -266,6 +266,57 @@ class MisMacrosAppTest {
         composeRule.waitForIdle()
     }
 
+    @Test
+    fun externalAiBridge_clipboardPastePopulatesMealAndRecipesWithoutApiKey() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        composeRule.waitForIdle()
+
+        // 1. Copy ChatGPT/Claude macro JSON to clipboard and paste inside MealEditorSheet
+        com.example.util.ExternalAiBridge.copyToClipboard(
+            context,
+            """{"name":"Sándwich de pavo","kcal":390,"p":29,"c":41,"f":11}"""
+        )
+        composeRule.onNodeWithTag("fab_add_meal").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("meal_share_external_ai_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("meal_paste_external_ai_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("meal_save_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        waitUntilScrollToNode("today_lazy_column", hasText("Sándwich de pavo"))
+        composeRule.onNode(
+            hasText("Sándwich de pavo") and hasAnyAncestor(hasTestTag("today_lazy_column"))
+        ).assertIsDisplayed()
+
+        // 2. Paste ChatGPT/Claude recipe JSON inside Cocina
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_recipes"))
+        composeRule.onNodeWithTag("nav_recipes").performClick()
+        composeRule.waitForIdle()
+
+        com.example.util.ExternalAiBridge.copyToClipboard(
+            context,
+            """{"recipes":[{"title":"Pollo al ajillo expres","difficulty":"basico","prepMinutes":12,"ingredients":["160g pollo"],"steps":["Dora el pollo con ajo"],"tips":"Añade limón","kcal":310,"p":36,"c":4,"f":14}]}"""
+        )
+        waitUntilScrollToNode("recipes_lazy_column", hasTestTag("recipes_paste_external_ai_button"))
+        composeRule.onNodeWithTag("recipes_paste_external_ai_button").performClick()
+        composeRule.waitForIdle()
+
+        waitUntilScrollToNode("recipes_lazy_column", hasText("Pollo al ajillo expres"))
+        composeRule.onNode(
+            hasText("Pollo al ajillo expres") and hasAnyAncestor(hasTestTag("recipes_lazy_column"))
+        ).assertIsDisplayed()
+
+        // 3. Verify ChatGPT/Claude bridge buttons exist in IA screen
+        composeRule.onNodeWithTag("bottom_pill_bar").performScrollToNode(hasTestTag("nav_ai"))
+        composeRule.onNodeWithTag("nav_ai").performClick()
+        composeRule.waitForIdle()
+        waitUntilScrollToNode("ai_lazy_column", hasTestTag("external_ai_week_button"))
+        composeRule.onNodeWithTag("external_ai_week_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("external_ai_question_button").assertIsDisplayed()
+    }
+
     private fun waitUntilScrollToNode(listTag: String, matcher: SemanticsMatcher) {
         composeRule.waitUntil(timeoutMillis = 8_000) {
             runCatching {

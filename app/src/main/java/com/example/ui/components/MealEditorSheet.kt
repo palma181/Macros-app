@@ -29,7 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +64,7 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.MealType
 import com.example.ui.MealEditorState
+import com.example.util.ExternalAiBridge
 import com.example.util.ImageProcessor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -79,6 +82,7 @@ fun MealEditorBottomSheet(
         fatText: String?
     ) -> Unit,
     onEstimateText: () -> Unit,
+    onPasteExternalResponse: (String) -> Boolean,
     onPhotoSelected: (Uri) -> Unit,
     onSave: () -> Unit
 ) {
@@ -187,6 +191,7 @@ fun MealEditorBottomSheet(
                 maxLines = 3,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .bringIntoViewOnFocus()
                     .testTag("meal_name_input")
             )
 
@@ -253,6 +258,56 @@ fun MealEditorBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.estimate_text))
+                }
+            }
+
+            // No-API-Key Bridge: Send to ChatGPT/Claude app & Paste response
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val prompt = ExternalAiBridge.buildMealPrompt(
+                            description = state.name,
+                            hasPhotoHint = state.photoUri != null
+                        )
+                        ExternalAiBridge.sharePromptToExternalApp(
+                            context = context,
+                            prompt = prompt,
+                            chooserTitle = "Enviar a ChatGPT o Claude"
+                        )
+                    },
+                    enabled = !state.isAnalyzing && (state.name.isNotBlank() || state.photoUri != null),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("meal_share_external_ai_button")
+                ) {
+                    Icon(
+                        Icons.Outlined.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("ChatGPT / Claude", maxLines = 1)
+                }
+                OutlinedButton(
+                    onClick = {
+                        val pasted = ExternalAiBridge.readClipboardText(context).orEmpty()
+                        onPasteExternalResponse(pasted)
+                    },
+                    enabled = !state.isAnalyzing,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("meal_paste_external_ai_button")
+                ) {
+                    Icon(
+                        Icons.Outlined.ContentPaste,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Pegar macros", maxLines = 1)
                 }
             }
 
@@ -388,6 +443,6 @@ private fun MacroNumberField(
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = modifier
+        modifier = modifier.bringIntoViewOnFocus()
     )
 }

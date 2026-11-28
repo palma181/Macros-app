@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,10 +36,12 @@ import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TipsAndUpdates
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -69,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,8 +83,10 @@ import com.example.data.model.RecipeDifficulty
 import com.example.data.model.RecipeOption
 import com.example.data.model.RecipeSection
 import com.example.ui.MacroUiState
+import com.example.ui.components.bringIntoViewOnFocus
 import com.example.ui.theme.LocalMacroColors
 import com.example.util.DateUtils
+import com.example.util.ExternalAiBridge
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -97,8 +103,10 @@ fun RecipesScreen(
     onSaveRecipeToFavorites: (RecipeOption) -> Unit,
     onDeleteSavedRecipe: (String) -> Unit,
     onLogRecipeAsMeal: (RecipeOption, MealType, String, Boolean) -> Unit,
+    onImportExternalRecipes: (String) -> Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val studio = uiState.recipeStudio
     var customIngredient by rememberSaveable { mutableStateOf("") }
     val isSnacksSection = studio.activeSection == RecipeSection.SNACKS_DRINKS
@@ -194,6 +202,7 @@ fun RecipesScreen(
                                 singleLine = true,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .bringIntoViewOnFocus()
                                     .testTag("custom_ingredient_input")
                             )
                             Button(
@@ -353,6 +362,63 @@ fun RecipesScreen(
                                     "Crear más opciones con IA (Básico / Intermedio / Avanzado)"
                                 }
                             )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val chosen = studio.selectedIngredients
+                                if (chosen.isEmpty()) {
+                                    onGenerateAiRecipes()
+                                } else {
+                                    val prompt = ExternalAiBridge.buildRecipesPrompt(
+                                        ingredients = chosen,
+                                        difficulty = studio.difficultyFilter,
+                                        section = studio.activeSection
+                                    )
+                                    ExternalAiBridge.sharePromptToExternalApp(
+                                        context = context,
+                                        prompt = prompt,
+                                        chooserTitle = "Enviar ingredientes a ChatGPT o Claude"
+                                    )
+                                }
+                            },
+                            enabled = !studio.isGeneratingAi,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("recipes_share_external_ai_button")
+                        ) {
+                            Icon(
+                                Icons.Outlined.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("ChatGPT / Claude", maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val clip = ExternalAiBridge.readClipboardText(context).orEmpty()
+                                onImportExternalRecipes(clip)
+                            },
+                            enabled = !studio.isGeneratingAi,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("recipes_paste_external_ai_button")
+                        ) {
+                            Icon(
+                                Icons.Outlined.ContentPaste,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Pegar recetas", maxLines = 1)
                         }
                     }
 
@@ -770,7 +836,8 @@ private fun RecipeManualBottomSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
